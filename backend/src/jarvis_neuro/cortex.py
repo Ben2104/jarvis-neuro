@@ -1,9 +1,10 @@
 """T1 tissue boundary for a fold-following cortex, with an envelope fallback."""
 import numpy as np
+import trimesh
 from scipy.ndimage import binary_dilation, binary_erosion, binary_fill_holes, label
 from skimage.filters import threshold_otsu
 
-from .geometry import mesh_from_mask
+from .geometry import mesh_from_mask, signed_volume
 from .io_msd import LoadedCase
 from .meshing import smooth_and_decimate
 
@@ -38,4 +39,15 @@ def cortex_surface(case: LoadedCase, brain: np.ndarray, seg: np.ndarray) -> tupl
     mask = cortex_mask(case.image[..., case.modalities['t1w']], brain, seg > 0)
     if mask is None:
         return None
-    return smooth_and_decimate(*mesh_from_mask(mask, case.vox2ras, sigma=0.6), BRAIN_TARGET_FACES, iterations=10)
+    vertices, faces = smooth_and_decimate(
+        *mesh_from_mask(mask, case.vox2ras, sigma=0.6), BRAIN_TARGET_FACES, iterations=10
+    )
+    if len(faces) == 0:
+        return vertices, faces
+    components = trimesh.Trimesh(vertices, faces, process=False).split(only_watertight=False)
+    largest = max(components, key=lambda mesh: len(mesh.faces))
+    vertices = np.asarray(largest.vertices, np.float32)
+    faces = np.asarray(largest.faces, np.uint32)
+    if signed_volume(vertices, faces) < 0:
+        faces = faces[:, ::-1].copy()
+    return vertices, faces

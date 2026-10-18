@@ -1,8 +1,9 @@
 import numpy as np
+import pytest
 import trimesh
 
 from jarvis_neuro.cortex import cortex_mask, cortex_surface
-from jarvis_neuro.geometry import mesh_from_mask
+from jarvis_neuro.geometry import mesh_from_mask, signed_volume
 from jarvis_neuro.io_msd import LoadedCase
 
 
@@ -52,3 +53,26 @@ def test_largest_component_drops_detached_island():
     mask = cortex_mask(t1, brain, np.zeros_like(brain))
     assert mask is not None
     assert not mask[1:4, 1:4, 1:4].any()
+
+
+@pytest.mark.parametrize("reverse_winding", [False, True])
+def test_cortex_surface_keeps_largest_mesh_component(monkeypatch, reverse_winding):
+    from jarvis_neuro import cortex
+
+    main = trimesh.creation.icosphere(subdivisions=2, radius=3)
+    island = trimesh.creation.icosphere(subdivisions=1, radius=1)
+    island.apply_translation([10, 0, 0])
+    detached = trimesh.util.concatenate([main, island])
+    faces = detached.faces[:, ::-1] if reverse_winding else detached.faces
+    # Fragmentation can occur during smoothing/decimation, after voxel-component filtering.
+    monkeypatch.setattr(cortex, "smooth_and_decimate", lambda *args, **kwargs: (detached.vertices, faces))
+    t1, brain, _ = folded_ball()
+    case = LoadedCase("test", t1[..., None], {"t1w": 0}, None, np.eye(4))
+    vertices, faces = cortex_surface(case, brain, np.zeros(brain.shape, np.uint8))
+    mesh = trimesh.Trimesh(vertices, faces, process=False)
+    assert len(mesh.split(only_watertight=False)) == 1
+    assert len(faces) == len(main.faces)
+    assert vertices[:, 0].max() < 4
+    assert vertices.dtype == np.float32
+    assert faces.dtype == np.uint32
+    assert signed_volume(vertices, faces) > 0
