@@ -46,6 +46,14 @@ def test_bins_have_dims_and_mask_round_trips(baked):
     assert (raw == case.labels).all()
 
 
+def test_flair_bin_is_brighter_in_edema_than_non_tumor_brain(baked):
+    d, m, case = baked
+    flair = np.fromfile(d / "flair_u8.bin", np.uint8).reshape(m.dims)
+    edema = case.labels == 1
+    non_tumor_brain = (case.image != 0).any(-1) & (case.labels == 0)
+    assert flair[edema].mean() > flair[non_tumor_brain].mean()
+
+
 def test_tumor_mesh_aligns_with_manifest_centroid(baked):
     """The alignment claim: GLB vertices and manifest numbers share one frame."""
     d, m, _ = baked
