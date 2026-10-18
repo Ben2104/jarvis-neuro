@@ -6,6 +6,7 @@ from pathlib import Path
 import numpy as np
 from scipy.ndimage import binary_fill_holes
 
+from .cortex import cortex_surface
 from .geometry import RAS2GL, mesh_from_mask
 from .glb import draco_compress, write_glb
 from .io_msd import LoadedCase, load_msd_case
@@ -36,7 +37,10 @@ def bake_case(case: LoadedCase, seg: np.ndarray, provenance: str, out_dir: Path,
     brain = brain_mask(case, seg)
     written_seg = seg.copy()
 
-    v, f = smooth_and_decimate(*mesh_from_mask(brain, A, sigma=1.0), BRAIN_TARGET_FACES)
+    surf = cortex_surface(case, brain, seg)
+    v, f = surf if surf is not None else smooth_and_decimate(
+        *mesh_from_mask(brain, A, sigma=1.0), BRAIN_TARGET_FACES
+    )
     nodes = [("brain_surface", v, f)]
     assets: list = [SurfaceAsset(id="brain_surface", node="brain_surface", kind="surface")]
     for label in TUMOR_LABELS:
