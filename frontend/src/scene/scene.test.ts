@@ -1,4 +1,4 @@
-import { Box3, FrontSide, type Mesh, MeshStandardMaterial, Raycaster, ShaderLib, Vector3 } from 'three'
+import { Box3, BoxGeometry, FrontSide, Mesh, MeshBasicMaterial, MeshStandardMaterial, Raycaster, ShaderLib, Vector3 } from 'three'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { rasToScene, sceneToRas } from '../lib/affine'
 import type { LoadedCase } from '../lib/loadCase'
@@ -9,7 +9,7 @@ import { loadSynth } from '../test/fixtures'
 import { cutawayPlane, hemispherePlane } from './clipping'
 import { assetBox } from './focus'
 import { HOVER_EMISSIVE, SELECTED_EMISSIVE, addFresnelRim } from './materials'
-import { isClippedAway, pickTumor } from './picking'
+import { isClippedAway, pickPart } from './picking'
 import { type PreparedCase, prepareCase, releaseCase } from './prepare'
 import { type SceneView, applyViewState, sceneOffset } from './viewState'
 
@@ -54,6 +54,7 @@ describe('prepareCase', () => {
     expect(p.root.scale.toArray()).toEqual([0.001, 0.001, 0.001])
     expect(prepareCase(c)).toBe(p)
     expect(p.tumorMeshes.map((m) => m.userData.assetId)).toEqual(['tumor_et', 'tumor_ncr', 'tumor_ed'])
+    expect(p.pickMeshes).toEqual(p.tumorMeshes)
   })
 
   it('builds the brain material per spec §6 and tumour colours from the manifest', () => {
@@ -258,7 +259,7 @@ describe('explode', () => {
     const target: Vec3 = [ncr.centroid_ras[0] + o[0], ncr.centroid_ras[1] + o[1], ncr.centroid_ras[2] + o[2]]
     const from = v3(rasToScene(c.frame, [target[0], target[1] + 200, target[2]]))
     const ray = new Raycaster(from, v3(rasToScene(c.frame, target)).sub(from).normalize())
-    const hit = pickTumor(ray, p)!
+    const hit = pickPart(ray, p)!
     expect(hit.assetId).toBe('tumor_ncr')
     const ras = sceneToRas(c.frame, hit.point.toArray() as Vec3)
     const back = [ras[0] - o[0], ras[1] - o[1], ras[2] - o[2]]
@@ -267,6 +268,19 @@ describe('explode', () => {
       expect(back[a]).toBeLessThanOrEqual(ncr.bbox_ras[1][a] + 1.5)
     }
     applyViewState(p, c, exploded(0))
+  })
+
+  it('does not pick a moved tumour at its unexploded position', () => {
+    applyViewState(p, c, exploded(1))
+    const biggest = tumorAssets(c.manifest)
+      .map((t) => ({ t, o: offsetsAt(1).assets[t.id] }))
+      .sort((a, b) => Math.hypot(...b.o) - Math.hypot(...a.o))[0]
+    expect(Math.hypot(...biggest.o)).toBeGreaterThan(20)
+    const c0 = biggest.t.centroid_ras
+    const from = v3(rasToScene(c.frame, [c0[0], c0[1] + 200, c0[2]]))
+    const ray = new Raycaster(from, v3(rasToScene(c.frame, c0)).sub(from).normalize())
+    expect(pickPart(ray, p)?.assetId).not.toBe(biggest.t.id)
+    applyViewState(p, c, defaults())
   })
 
   it('keeps isClippedAway working on a moved mesh: the cut travels with the part', () => {
@@ -283,25 +297,59 @@ describe('explode', () => {
   })
 })
 
-describe('pickTumor', () => {
+describe('pickPart', () => {
   it('hits the outer tumour shell and never the brain surface', () => {
     applyViewState(p, c, defaults())
     const all = rayFromFront().intersectObject(p.root, true)
     expect(all.some((h) => h.object.userData.assetId === 'brain_surface')).toBe(false)
-    expect(pickTumor(rayFromFront(), p)?.assetId).toBe('tumor_ed')
+    expect(pickPart(rayFromFront(), p)?.assetId).toBe('tumor_ed')
   })
 
   it('skips hidden tumours', () => {
     applyViewState(p, c, { ...defaults(), visible: { ...defaults().visible, tumor_ed: false } })
-    expect(pickTumor(rayFromFront(), p)?.assetId).toBe('tumor_et')
+    expect(pickPart(rayFromFront(), p)?.assetId).toBe('tumor_et')
     applyViewState(p, c, defaults())
   })
 
   it('skips hits on the clipped-away side of a cutaway', () => {
     applyViewState(p, c, { ...defaults(), cutaway: { plane: 'coronal', rasMm: 10 } })
-    const hit = pickTumor(rayFromFront(), p)!
+    const hit = pickPart(rayFromFront(), p)!
     expect(sceneToRas(c.frame, hit.point.toArray() as Vec3)[1]).toBeLessThanOrEqual(10 + 1e-6)
     applyViewState(p, c, defaults())
+  })
+  describe('region meshes', () => {
+    /** A box in front of (or away from) the tumours, tagged like an atlas region. */
+    function withRegion(at: Vec3, run: (rayAt: (x: number) => Raycaster) => void) {
+      const box = new Mesh(new BoxGeometry(0.02, 0.02, 0.02), new MeshBasicMaterial())
+      box.userData = { assetId: 'region_x', kind: 'region' }
+      box.position.copy(v3(rasToScene(c.frame, at)))
+      box.updateMatrixWorld(true)
+      p.pickMeshes.push(box)
+      try {
+        run((x) => {
+          const from = v3(rasToScene(c.frame, [x, 218, at[2]]))
+          const to = v3(rasToScene(c.frame, [x, 18, at[2]]))
+          return new Raycaster(from, to.sub(from).normalize())
+        })
+      } finally {
+        p.pickMeshes.pop()
+      }
+    }
+
+    it('a tumour behind a nearer region still wins', () => {
+      applyViewState(p, c, defaults())
+      withRegion([-24, 150, 3], (rayAt) => {
+        const ray = rayAt(-24)
+        expect(ray.intersectObjects(p.pickMeshes, false)[0].object.userData.kind).toBe('region')
+        expect(pickPart(ray, p)?.assetId).toBe('tumor_ed')
+      })
+    })
+
+    it('the region wins when the ray hits no tumour', () => {
+      withRegion([60, 150, 3], (rayAt) => {
+        expect(pickPart(rayAt(60), p)?.assetId).toBe('region_x')
+      })
+    })
   })
 })
 

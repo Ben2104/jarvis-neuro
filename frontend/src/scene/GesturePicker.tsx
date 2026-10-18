@@ -4,7 +4,7 @@ import { Raycaster, Vector2 } from 'three'
 import { gestureBus } from '../gestures/bus'
 import { viewNdc } from '../gestures/cover'
 import { useViewer, viewerStore } from '../state/store'
-import { pickTumor } from './picking'
+import { pickPart } from './picking'
 import { prepareCase } from './prepare'
 
 /** Turns gesture pointer events into hover/select through the same picking rules as the mouse. */
@@ -28,7 +28,7 @@ export function GesturePicker() {
       const { width, height } = get().size
       const [x, y] = viewNdc(e.ndc, width, height)
       raycaster.setFromCamera(ndc.set(x, y), camera)
-      const hit = pickTumor(raycaster, prepared)
+      const hit = pickPart(raycaster, prepared)
       if (e.type === 'hover') s.hover(hit?.assetId ?? null)
       else if (hit) s.select(hit.assetId)
     })

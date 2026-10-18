@@ -23,6 +23,8 @@ export interface PreparedCase {
   materials: Map<string, MeshStandardMaterial>
   parts: Part[]
   tumorMeshes: Mesh[]
+  /** Every mesh hover and select may hit, each with `userData.assetId`. The tumour meshes; the atlas branch appends brain regions. */
+  pickMeshes: Mesh[]
 }
 
 const prepared = new WeakMap<LoadedCase, PreparedCase>()
@@ -77,7 +79,7 @@ export function prepareCase(c: LoadedCase): PreparedCase {
   }
   for (const m of replaced) m.dispose()
 
-  const result = { root, meshes, materials, parts, tumorMeshes }
+  const result = { root, meshes, materials, parts, tumorMeshes, pickMeshes: [...tumorMeshes] }
   prepared.set(c, result)
   return result
 }
