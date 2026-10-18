@@ -22,6 +22,10 @@ export const GESTURE_CONFIG = {
   rotateDeadzone: 0.002,
   /** |scale - 1| per frame below which two hands do not zoom. */
   zoomDeadzone: 0.003,
+  /** Pinch-point vertical motion per frame, in NDC, below which a held pinch does not explode. */
+  explodeDeadzone: 0.002,
+  /** Explode amount per NDC unit of upward pinch travel. */
+  explodeGain: 1.5,
 }
 export type GestureConfig = typeof GESTURE_CONFIG
 
@@ -95,6 +99,12 @@ export function stepGesture(
       const dy = palm[1] - prev.palm[1]
       if (Math.hypot(dx, dy) > cfg.rotateDeadzone) events.push({ type: 'rotate', dx, dy })
     }
+  }
+
+  // A held pinch drags the explode amount: pinch point up (NDC y grows) = apart.
+  if (pinched && prev.pinched && prev.pointer) {
+    const dy = pointer[1] - prev.pointer[1]
+    if (Math.abs(dy) > cfg.explodeDeadzone) events.push({ type: 'explode', delta: dy * cfg.explodeGain })
   }
 
   return { state: { hands: 1, pinched, armed, ratio, pointer, palm, spread: null }, events }

@@ -73,6 +73,46 @@ describe('open hand', () => {
   })
 })
 
+describe('pinch-drag explode', () => {
+  const cfg = { ...GESTURE_CONFIG, alpha: 1 }
+  const held = (ys: number[]) => [oneHand({ pinch: 1, y: ys[0] }), ...ys.map((y) => oneHand({ pinch: 0.1, y }))]
+
+  it('emits a positive delta as a held pinch moves up and a negative one as it moves down', () => {
+    // Raw image y decreasing = the hand moving up on screen.
+    const up = run(held([0.6, 0.55, 0.5, 0.45]), initialGestureState(), cfg).of('explode')
+    expect(up).toHaveLength(3)
+    expect(up.every((e) => e.delta > 0)).toBe(true)
+    // toNdc sums two landmarks, so 0.05 of image height is 0.1 NDC.
+    expect(up[0].delta).toBeCloseTo(0.1 * GESTURE_CONFIG.explodeGain, 6)
+    const down = run(held([0.45, 0.5, 0.55, 0.6]), initialGestureState(), cfg).of('explode')
+    expect(down.length).toBeGreaterThan(0)
+    expect(down.every((e) => e.delta < 0)).toBe(true)
+  })
+
+  it('emits nothing without a pinch', () => {
+    const r = run([0.6, 0.5, 0.4, 0.3].map((y) => oneHand({ pinch: 1, y })), initialGestureState(), cfg)
+    expect(r.of('explode')).toHaveLength(0)
+    expect(r.of('rotate').length).toBeGreaterThan(0)
+  })
+
+  it('ignores vertical motion below the deadzone', () => {
+    const tiny = GESTURE_CONFIG.explodeDeadzone / 4
+    const r = run(held([0.5, 0.5 - tiny, 0.5 - 2 * tiny, 0.5 - 3 * tiny]), initialGestureState(), cfg)
+    expect(r.of('select')).toHaveLength(1)
+    expect(r.of('explode')).toHaveLength(0)
+  })
+
+  it('does not explode on the frame the pinch starts, and still selects once', () => {
+    const r = run([oneHand({ pinch: 1, y: 0.6 }), oneHand({ pinch: 0.1, y: 0.4 })], initialGestureState(), cfg)
+    expect(r.of('select')).toHaveLength(1)
+    expect(r.of('explode')).toHaveLength(0)
+  })
+
+  it('does not rotate while a pinch drags', () => {
+    expect(run(held([0.6, 0.5, 0.4]), initialGestureState(), cfg).of('rotate')).toHaveLength(0)
+  })
+})
+
 describe('two hands', () => {
   it('zooms in as the hands move apart and out as they close', () => {
     const pair = (gap: number) => [makeHand({ x: 0.5 - gap / 2 }), makeHand({ x: 0.5 + gap / 2 })]

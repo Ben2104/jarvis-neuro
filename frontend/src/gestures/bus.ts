@@ -6,6 +6,7 @@ export type GestureEvent =
   | { type: 'select'; ndc: NdcPoint }
   | { type: 'rotate'; dx: number; dy: number }
   | { type: 'zoom'; scale: number }
+  | { type: 'explode'; delta: number }
   | { type: 'lost' }
 
 export function createBus<E>() {

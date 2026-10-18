@@ -2,7 +2,7 @@ import { CameraControls } from '@react-three/drei'
 import { type ComponentRef, useEffect, useRef } from 'react'
 import { Vector3 } from 'three'
 import { gestureBus } from '../gestures/bus'
-import { useViewer } from '../state/store'
+import { useViewer, viewerStore } from '../state/store'
 import { assetBox } from './focus'
 import { prepareCase } from './prepare'
 
@@ -34,6 +34,17 @@ export function CameraRig() {
         if (!controls) return
         if (e.type === 'rotate') void controls.rotate(-e.dx * ROTATE_GAIN, e.dy * ROTATE_GAIN, false)
         if (e.type === 'zoom') void controls.dollyTo(controls.distance / e.scale, false)
+      }),
+    [],
+  )
+
+  // Per-frame like rotate and zoom, so it writes the store directly instead of going through executeTool.
+  useEffect(
+    () =>
+      gestureBus.on((e) => {
+        if (e.type !== 'explode') return
+        const s = viewerStore.getState()
+        s.setExplode(s.explode + e.delta)
       }),
     [],
   )
