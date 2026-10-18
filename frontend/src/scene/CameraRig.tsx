@@ -2,16 +2,10 @@ import { CameraControls } from '@react-three/drei'
 import { type ComponentRef, useEffect, useRef } from 'react'
 import { Vector3 } from 'three'
 import { gestureBus } from '../gestures/bus'
-import { useViewer, viewerStore } from '../state/store'
+import { useViewer } from '../state/store'
+import { applyZoom } from './gestureEvents'
 import { assetBox } from './focus'
 import { prepareCase } from './prepare'
-
-/**
- * Radians per NDC unit of hand travel. Mouse dragging in camera-controls is
- * rotate(-2π·Δx/height, -2π·Δy/height) with Δy pointing down; NDC spans 2 units and points up,
- * so the hand equivalent is rotate(-dx·π, +dy·π).
- */
-export const ROTATE_GAIN = Math.PI
 
 export function CameraRig() {
   const ref = useRef<ComponentRef<typeof CameraControls>>(null)
@@ -32,19 +26,7 @@ export function CameraRig() {
       gestureBus.on((e) => {
         const controls = ref.current
         if (!controls) return
-        if (e.type === 'rotate') void controls.rotate(-e.dx * ROTATE_GAIN, e.dy * ROTATE_GAIN, false)
-        if (e.type === 'zoom') void controls.dollyTo(controls.distance / e.scale, false)
-      }),
-    [],
-  )
-
-  // Per-frame like rotate and zoom, so it writes the store directly instead of going through executeTool.
-  useEffect(
-    () =>
-      gestureBus.on((e) => {
-        if (e.type !== 'explode') return
-        const s = viewerStore.getState()
-        s.setExplode(s.explode + e.delta)
+        applyZoom(e, controls)
       }),
     [],
   )

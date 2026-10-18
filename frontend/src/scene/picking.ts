@@ -1,4 +1,4 @@
-import type { Material, Object3D, Raycaster, Vector3 } from 'three'
+import { Box3, type Material, type Object3D, type Raycaster, type Vector3 } from 'three'
 import type { PreparedCase } from './prepare'
 
 export interface PickHit {
@@ -12,11 +12,29 @@ export function isClippedAway(object: Object3D, point: Vector3): boolean {
   return planes.some((plane) => plane.distanceToPoint(point) < 0)
 }
 
-/** Nearest visible tumour hit that is not clipped away. brain_surface is never hit. */
-export function pickTumor(raycaster: Raycaster, p: PreparedCase): PickHit | null {
-  const visible = p.tumorMeshes.filter((m) => m.visible)
+/**
+ * The part a ray hits: visible, not clipped away. A tumour (`userData.kind !== 'region'`) beats any region hit,
+ * even a nearer one, because regions wrap the tumours; otherwise the nearest hit wins. brain_surface is never hit.
+ */
+export function pickPart(raycaster: Raycaster, p: PreparedCase): PickHit | null {
+  const visible = p.pickMeshes.filter((m) => m.visible)
+  let region: PickHit | null = null
   for (const hit of raycaster.intersectObjects(visible, false)) {
-    if (!isClippedAway(hit.object, hit.point)) return { assetId: hit.object.userData.assetId as string, point: hit.point }
+    if (isClippedAway(hit.object, hit.point)) continue
+    const picked = { assetId: hit.object.userData.assetId as string, point: hit.point }
+    if (hit.object.userData.kind !== 'region') return picked
+    region ??= picked
   }
-  return null
+  return region
+}
+
+/**
+ * True when the ray passes through the bounds of the visible parts. brain_surface is never ray-hit (rays must reach
+ * the tumours inside), so "the reticle is on the brain" is this bounding-box test.
+ */
+export function rayHitsBrain(raycaster: Raycaster, p: PreparedCase): boolean {
+  p.root.updateMatrixWorld(true)
+  const box = new Box3()
+  for (const { mesh } of p.parts) if (mesh.visible) box.union(new Box3().setFromObject(mesh))
+  return !box.isEmpty() && raycaster.ray.intersectsBox(box)
 }

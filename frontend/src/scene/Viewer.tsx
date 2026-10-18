@@ -2,7 +2,7 @@ import { Canvas } from '@react-three/fiber'
 import { useViewer, viewerStore } from '../state/store'
 import { CameraRig } from './CameraRig'
 import { CaseModel } from './CaseModel'
-import { GesturePicker } from './GesturePicker'
+import { GestureController } from './GestureController'
 import { Marker } from './Marker'
 
 export const STAGE_COLOR = '#07090A'
@@ -28,7 +28,7 @@ export function Viewer() {
       {current && <CaseModel key={`${current.manifest.case_id}:${current.manifest.provenance}`} loaded={current} />}
       <Marker />
       <CameraRig />
-      <GesturePicker />
+      <GestureController />
     </Canvas>
   )
 }

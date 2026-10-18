@@ -503,6 +503,31 @@ kbd {
 .gesture-cursor.pinch {
   transform: scale(0.6);
 }
+.gesture-cursor[data-pose='open'] {
+  width: 48px;
+  height: 48px;
+  margin: -24px 0 0 -24px;
+}
+.gesture-cursor[data-pose='point'] {
+  width: 16px;
+  height: 16px;
+  margin: -8px 0 0 -8px;
+}
+.gesture-cursor[data-pose='point']::after {
+  inset: 3px;
+}
+.gesture-cursor[data-pose='fist'] {
+  background: var(--accent);
+}
+
+.hand-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 2;
+}
 
 .webcam-backdrop {
   position: absolute;

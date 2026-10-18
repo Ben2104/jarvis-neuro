@@ -1,5 +1,6 @@
 import type { ViewerStore } from '../state/store'
 import { gestureBus } from './bus'
+import { toMirroredNdc } from './handDraw'
 import { type GestureState, type Landmark, initialGestureState, stepGesture } from './pinch'
 import { clearWebcamFeed, setWebcamFeed } from './webcamStream'
 
@@ -118,7 +119,8 @@ export function startHandSession(store: ViewerStore, env: HandSessionEnv): () =>
           fail('unavailable', `hand tracking stopped: ${messageOf(e)}`)
           return
         }
-        const { state, events } = stepGesture(gesture, result.landmarks)
+        gestureBus.emit({ type: 'landmarks', hands: result.landmarks.map((h) => h.map(toMirroredNdc)) })
+        const { state, events } = stepGesture(gesture, result.landmarks, env.now())
         const handsChanged = state.hands !== gesture.hands
         gesture = state
         for (const e of events) gestureBus.emit(e)
