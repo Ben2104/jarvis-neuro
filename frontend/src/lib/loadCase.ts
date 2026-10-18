@@ -44,6 +44,9 @@ async function getBytes(fetchFn: typeof fetch, url: string): Promise<Uint8Array<
     throw new CaseLoadError(`could not fetch ${url}: ${messageOf(e)}`)
   }
   if (!res.ok) throw new CaseLoadError(`HTTP ${res.status} for ${url}`)
+  if (res.headers.get('content-type')?.includes('text/html')) {
+    throw new CaseLoadError(`${url} returned an HTML page, not the file (missing from public/cases?)`)
+  }
   return new Uint8Array(await res.arrayBuffer())
 }
 

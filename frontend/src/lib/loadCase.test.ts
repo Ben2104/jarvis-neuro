@@ -88,6 +88,18 @@ describe('fetchCase', () => {
     expect(msg).toMatch(/Content-Encoding: gzip/)
   })
 
+  it('reports an HTML fallback instead of a missing FLAIR volume', async () => {
+    const msg = await loadError({
+      [`${BASE}flair_u8.bin`]: () => new Response('<html></html>', {
+        status: 200,
+        headers: { 'content-type': 'text/html' },
+      }),
+    })
+    expect(msg).toMatch(/HTML page/)
+    expect(msg).toContain(`${BASE}flair_u8.bin`)
+    expect(msg).not.toMatch(/gzip/)
+  })
+
   it('reports an unparseable GLB', async () => {
     expect(await loadError({ [`${BASE}case.glb`]: () => new Response(new Uint8Array([1, 2, 3, 4])) })).toMatch(
       /could not parse glTF/,
