@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { makeHand } from '../test/hands'
 import type { GestureEvent } from './bus'
-import { type GestureState, type Landmark, initialGestureState, stepGesture } from './pinch'
+import { GESTURE_CONFIG, type GestureState, type Landmark, initialGestureState, stepGesture } from './pinch'
 
-function run(frames: Landmark[][][], start: GestureState = initialGestureState()) {
+function run(frames: Landmark[][][], start: GestureState = initialGestureState(), cfg = GESTURE_CONFIG) {
   let state = start
   const events: GestureEvent[][] = []
   const pinched: boolean[] = []
   for (const hands of frames) {
-    const r = stepGesture(state, hands)
+    const r = stepGesture(state, hands, cfg)
     state = r.state
     events.push(r.events)
     pinched.push(state.pinched)
@@ -38,14 +38,20 @@ describe('pinch hysteresis', () => {
   })
 
   it('a held pinch fires one select and no hover or rotate', () => {
-    const r = run([0.1, 0.1, 0.1, 0.1, 0.1].map((pinch, i) => oneHand({ pinch, x: 0.5 - i * 0.02 })))
+    const r = run([
+      oneHand({ pinch: 1, x: 0.5 }),
+      ...[0.1, 0.1, 0.1, 0.1, 0.1].map((pinch, i) => oneHand({ pinch, x: 0.5 - i * 0.02 })),
+    ], initialGestureState(), { ...GESTURE_CONFIG, alpha: 1 })
     expect(r.of('select')).toHaveLength(1)
-    expect(r.of('hover')).toHaveLength(0)
+    expect(r.events.slice(1).flat().filter((e) => e.type === 'hover')).toHaveLength(0)
     expect(r.of('rotate')).toHaveLength(0)
   })
 
   it('selects at the mirrored pinch point in NDC', () => {
-    const r = run([oneHand({ x: 0.3, y: 0.5, pinch: 0.1 })])
+    const r = run([
+      oneHand({ x: 0.3, y: 0.5, pinch: 1 }),
+      oneHand({ x: 0.3, y: 0.5, pinch: 0.1 }),
+    ], initialGestureState(), { ...GESTURE_CONFIG, alpha: 1 })
     const [sel] = r.of('select')
     expect(sel.ndc[0]).toBeCloseTo(0.4, 6)
     expect(sel.ndc[1]).toBeCloseTo(0.36, 6)
@@ -80,6 +86,26 @@ describe('two hands', () => {
 })
 
 describe('tracking changes', () => {
+  it('does not select again after a dropout while still pinched', () => {
+    const open = oneHand({ pinch: 1 })
+    const pinch = oneHand({ pinch: 0.1 })
+    const r = run([open, pinch, pinch, [], pinch, pinch], initialGestureState(), { ...GESTURE_CONFIG, alpha: 1 })
+    expect(r.of('select')).toHaveLength(1)
+  })
+
+  it('does not select again after two hands while still pinched', () => {
+    const open = oneHand({ pinch: 1 })
+    const pinch = oneHand({ pinch: 0.1 })
+    const pair = [makeHand({ x: 0.3 }), makeHand({ x: 0.7 })]
+    const r = run([open, pinch, pair, pinch], initialGestureState(), { ...GESTURE_CONFIG, alpha: 1 })
+    expect(r.of('select')).toHaveLength(1)
+  })
+
+  it('does not select a hand that appears already pinched', () => {
+    const r = run([0.1, 0.1, 0.1].map((pinch) => oneHand({ pinch })))
+    expect(r.of('select')).toHaveLength(0)
+  })
+
   it('emits lost once when the hand disappears and resets the state', () => {
     const r = run([oneHand({}), oneHand({}), [], []])
     expect(r.of('lost')).toHaveLength(1)

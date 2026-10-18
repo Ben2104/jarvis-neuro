@@ -28,6 +28,7 @@ export type GestureConfig = typeof GESTURE_CONFIG
 export interface GestureState {
   hands: number
   pinched: boolean
+  armed: boolean
   ratio: number | null
   pointer: NdcPoint | null
   palm: NdcPoint | null
@@ -37,6 +38,7 @@ export interface GestureState {
 export const initialGestureState = (): GestureState => ({
   hands: 0,
   pinched: false,
+  armed: false,
   ratio: null,
   pointer: null,
   palm: null,
@@ -77,8 +79,10 @@ export function stepGesture(
   const palm = emaPoint(prev.palm, toNdc(h[WRIST], h[MIDDLE_MCP]), cfg.alpha)
 
   let pinched = prev.pinched
-  if (!pinched && ratio < cfg.pinchOn) {
+  let armed = prev.armed || ratio > cfg.pinchOff
+  if (!pinched && armed && ratio < cfg.pinchOn) {
     pinched = true
+    armed = false
     events.push({ type: 'select', ndc: pointer })
   } else if (pinched && ratio > cfg.pinchOff) {
     pinched = false
@@ -93,5 +97,5 @@ export function stepGesture(
     }
   }
 
-  return { state: { hands: 1, pinched, ratio, pointer, palm, spread: null }, events }
+  return { state: { hands: 1, pinched, armed, ratio, pointer, palm, spread: null }, events }
 }
