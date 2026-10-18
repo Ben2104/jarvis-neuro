@@ -1,12 +1,13 @@
-import type { Mesh, Object3D } from 'three'
+import { type Mesh, type Object3D, Vector3 } from 'three'
 import { parseGlb as defaultParseGlb } from '../scene/gltf'
-import { type CaseFrame, makeFrame } from './affine'
+import { type CaseFrame, applyAffine, makeFrame, rasExtent } from './affine'
 import {
   type CaseIndex,
   type CaseIndexEntry,
   CaseIndexSchema,
   type Manifest,
   ManifestSchema,
+  type Vec3,
   formatIssues,
 } from './manifest'
 import { Volume } from './volume'
@@ -23,6 +24,12 @@ export class CaseLoadError extends Error {
   override name = 'CaseLoadError'
 }
 
+/** Axis-aligned box in RAS millimetres. */
+export interface RasBox {
+  min: Vec3
+  max: Vec3
+}
+
 export interface LoadedCase {
   entry: CaseIndexEntry
   manifest: Manifest
@@ -32,6 +39,8 @@ export interface LoadedCase {
   flair: Volume
   mask: Volume
   scene: Object3D
+  /** Extent of the surface asset, measured from the GLB: the manifest carries no bbox for it. */
+  brainBoxRas: RasBox
 }
 
 const messageOf = (e: unknown) => (e instanceof Error ? e.message : String(e))
@@ -74,6 +83,27 @@ function assertAssetNodes(manifest: Manifest, scene: Object3D, glbUrl: string) {
     const node = scene.getObjectByName(asset.node) as Mesh | undefined
     if (!node?.isMesh) throw new CaseLoadError(`asset ${asset.id}: no mesh named "${asset.node}" in ${glbUrl}`)
   }
+}
+
+/** RAS bounds of the surface mesh's vertices (the explode view needs the brain's width and centre). */
+export function measureBrainBox(manifest: Manifest, scene: Object3D, frame: CaseFrame): RasBox {
+  const surface = manifest.assets.find((a) => a.kind === 'surface')
+  const mesh = surface && (scene.getObjectByName(surface.node) as Mesh | undefined)
+  if (!mesh) return rasExtent(frame)
+  scene.updateMatrixWorld(true)
+  const position = mesh.geometry.getAttribute('position')
+  const min: Vec3 = [Infinity, Infinity, Infinity]
+  const max: Vec3 = [-Infinity, -Infinity, -Infinity]
+  const v = new Vector3()
+  for (let i = 0; i < position.count; i++) {
+    v.fromBufferAttribute(position, i).applyMatrix4(mesh.matrixWorld)
+    const ras = applyAffine(frame.gl2ras, [v.x, v.y, v.z])
+    for (let a = 0; a < 3; a++) {
+      min[a] = Math.min(min[a], ras[a])
+      max[a] = Math.max(max[a], ras[a])
+    }
+  }
+  return position.count > 0 ? { min, max } : rasExtent(frame)
 }
 
 export async function fetchIndex(deps: CaseDeps = {}): Promise<CaseIndex> {
@@ -127,5 +157,7 @@ export async function fetchCase(entry: CaseIndexEntry, deps: CaseDeps = {}): Pro
   }
   assertAssetNodes(manifest, scene, glbUrl)
 
-  return { entry, manifest, baseUrl, glbUrl, frame, flair, mask, scene }
+  const brainBoxRas = measureBrainBox(manifest, scene, frame)
+
+  return { entry, manifest, baseUrl, glbUrl, frame, flair, mask, scene, brainBoxRas }
 }

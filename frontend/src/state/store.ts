@@ -47,6 +47,8 @@ export interface ViewerState {
   /** The camera fits `assetId` whenever `nonce` changes. */
   focus: { assetId: string; nonce: number }
   toolLog: ToolLogEntry[]
+  /** Explode amount, 0 (assembled) to 1. */
+  explode: number
   gesturesOn: boolean
   webcam: { status: WebcamStatus; hands: number; error: string | null }
 }
@@ -58,6 +60,7 @@ export interface ViewerActions {
   setVisible(ids: string[], visible: boolean): void
   setCutaway(plane: CutPlane, rasMm: number): void
   setHemisphere(side: Hemisphere): void
+  setExplode(value: number): void
   setSlice(axis: Axis, index: number): void
   setMarker(ras: Vec3 | null): void
   select(id: string | null): void
@@ -82,7 +85,7 @@ export function sliceIndexThrough(frame: CaseFrame, axis: Axis, ras: Vec3): numb
 
 type InitialView = Pick<
   ViewerState,
-  'opacity' | 'visible' | 'cutaway' | 'hemisphere' | 'slice' | 'marker' | 'selected' | 'hovered'
+  'opacity' | 'visible' | 'cutaway' | 'hemisphere' | 'explode' | 'slice' | 'marker' | 'selected' | 'hovered'
 >
 
 export function initialViewFor(loaded: LoadedCase): InitialView {
@@ -95,6 +98,7 @@ export function initialViewFor(loaded: LoadedCase): InitialView {
     visible: Object.fromEntries(ids.map((id) => [id, true])),
     cutaway: { plane: 'none', rasMm: 0 },
     hemisphere: 'none',
+    explode: 0,
     slice: {
       axis,
       index: marker
@@ -120,6 +124,7 @@ export function createViewerStore(deps: CaseDeps = {}): ViewerStore {
     visible: {},
     cutaway: { plane: 'none', rasMm: 0 },
     hemisphere: 'none',
+    explode: 0,
     slice: { axis: 'axial', index: 0 },
     marker: null,
     selected: null,
@@ -172,6 +177,7 @@ export function createViewerStore(deps: CaseDeps = {}): ViewerStore {
       set((s) => ({ visible: { ...s.visible, ...Object.fromEntries(ids.map((id) => [id, visible])) } })),
     setCutaway: (plane, rasMm) => set({ cutaway: { plane, rasMm } }),
     setHemisphere: (hemisphere) => set({ hemisphere }),
+    setExplode: (value) => set((s) => ({ explode: Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : s.explode })),
     setSlice: (axis, index) => set({ slice: { axis, index } }),
     setMarker: (marker) => set({ marker }),
 

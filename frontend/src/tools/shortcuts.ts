@@ -17,6 +17,7 @@ export const SHORTCUTS: Shortcut[] = [
   { keys: ['[', ']'], label: 'Brain opacity −/+', tool: 'set_opacity' },
   { keys: ['C'], label: 'Cycle cutaway plane', tool: 'set_cutaway' },
   { keys: ['H'], label: 'Cycle hidden hemisphere', tool: 'hide_hemisphere' },
+  { keys: ['E'], label: 'Cycle explode 0 / 50 / 100%', tool: 'set_explode' },
   { keys: ['F'], label: 'Focus selection', tool: 'focus_region' },
   { keys: ['B'], label: 'Show / hide brain', tool: 'toggle_visibility' },
   { keys: ['T'], label: 'Show / hide tumour', tool: 'toggle_visibility' },
@@ -26,6 +27,7 @@ export const SHORTCUTS: Shortcut[] = [
 
 const AXIS_KEYS: Record<string, Axis> = { '1': 'axial', '2': 'coronal', '3': 'sagittal' }
 const OPACITY_STEP = 0.1
+const EXPLODE_STEPS = [0, 0.5, 1]
 
 export const normalizeKey = (key: string) => (key.length === 1 ? key.toLowerCase() : key)
 
@@ -73,6 +75,8 @@ export function shortcutToCall(rawKey: string, s: Viewer): ToolRequest | null {
     }
     case 'h':
       return { name: 'hide_hemisphere', args: { side: next(HEMISPHERES, s.hemisphere) } }
+    case 'e':
+      return { name: 'set_explode', args: { value: EXPLODE_STEPS.find((v) => v > s.explode + 1e-6) ?? 0 } }
     case 'f': {
       const target = s.selected ?? tumorIds[0] ?? 'brain_surface'
       return { name: 'focus_region', args: { asset_id: target } }

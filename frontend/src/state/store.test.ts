@@ -22,9 +22,23 @@ describe('viewer store', () => {
     expect(Object.values(s.visible).every(Boolean)).toBe(true)
     expect(s.cutaway).toEqual({ plane: 'none', rasMm: 0 })
     expect(s.hemisphere).toBe('none')
+    expect(s.explode).toBe(0)
     expect(s.slice).toEqual({ axis: 'axial', index: 25 })
     expect(s.marker).toEqual([-24, 18, 3])
     expect(s.focus).toEqual({ assetId: 'brain_surface', nonce: 1 })
+  })
+
+  it('clamps the explode amount and resets it when a case loads', async () => {
+    const store = await loadedStore()
+    store.getState().setExplode(2)
+    expect(store.getState().explode).toBe(1)
+    store.getState().setExplode(-1)
+    expect(store.getState().explode).toBe(0)
+    store.getState().setExplode(0.6)
+    store.getState().setExplode(Number.NaN)
+    expect(store.getState().explode).toBe(0.6)
+    await store.getState().loadCase('synth_001')
+    expect(store.getState().explode).toBe(0)
   })
 
   it('keeps the previous case when a reload fails, and reports the error', async () => {

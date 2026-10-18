@@ -12,6 +12,7 @@ export const TOOL_NAMES = [
   'focus_region',
   'set_cutaway',
   'hide_hemisphere',
+  'set_explode',
   'toggle_visibility',
   'inspect_mri_slice',
 ] as const
@@ -32,6 +33,7 @@ export interface ToolArgs {
   focus_region: { asset_id: string }
   set_cutaway: { plane: CutPlane; ras_mm: number }
   hide_hemisphere: { side: Hemisphere }
+  set_explode: { value: number }
   toggle_visibility: { asset_ids: string[]; visible: boolean }
   inspect_mri_slice: { axis: Axis; index: number }
 }
@@ -81,6 +83,7 @@ export function makeCaseToolSchemas(c: LoadedCase): { [K in CaseToolName]: z.Zod
         return { plane: a.plane, ras_mm: clamp(a.ras_mm, extent.min[d], extent.max[d]) }
       }),
     hide_hemisphere: z.strictObject({ side: z.enum(HEMISPHERES) }),
+    set_explode: z.strictObject({ value: z.number().transform((v) => clamp(v, 0, 1)) }),
     toggle_visibility: z.strictObject({ asset_ids: z.array(assetId).min(1), visible: z.boolean() }),
     inspect_mri_slice: z
       .strictObject({ axis: z.enum(AXES), index: z.number() })

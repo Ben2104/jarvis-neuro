@@ -6,6 +6,7 @@ import { fmtMm } from './format'
 export function SceneControls() {
   const current = useViewer((s) => s.current)
   const brain = useViewer((s) => s.opacity.brain_surface ?? 0.45)
+  const explode = useViewer((s) => s.explode)
   const cutaway = useViewer((s) => s.cutaway)
   const hemisphere = useViewer((s) => s.hemisphere)
   const gesturesOn = useViewer((s) => s.gesturesOn)
@@ -51,6 +52,22 @@ export function SceneControls() {
             max={100}
             value={Math.round(brain * 100)}
             onChange={(e) => s.setOpacity('brain_surface', Number(e.target.value) / 100)}
+          />
+        </div>
+        <div>
+          <div className="row">
+            <label htmlFor="explode" className="lbl">
+              Explode
+            </label>
+            <span className="v">{Math.round(explode * 100)}%</span>
+          </div>
+          <input
+            id="explode"
+            type="range"
+            min={0}
+            max={100}
+            value={Math.round(explode * 100)}
+            onChange={(e) => s.setExplode(Number(e.target.value) / 100)}
           />
         </div>
         <div className="stack">

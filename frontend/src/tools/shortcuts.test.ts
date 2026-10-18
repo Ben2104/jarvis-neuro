@@ -60,6 +60,23 @@ describe('shortcutToCall', () => {
     expect(seen).toEqual(['left', 'right', 'none'])
   })
 
+  it('cycles explode 0 -> 0.5 -> 1 -> 0 through the tool', async () => {
+    const seen: number[] = []
+    for (let i = 0; i < 3; i++) {
+      expect(call('e')).toMatchObject({ name: 'set_explode' })
+      await press('e')
+      seen.push(store.getState().explode)
+    }
+    expect(seen).toEqual([0.5, 1, 0])
+    const last = store.getState().toolLog.at(-1)
+    expect(last).toMatchObject({ name: 'set_explode', source: 'keyboard' })
+  })
+
+  it('moves a slider-set explode on to the next step', () => {
+    store.getState().setExplode(0.3)
+    expect(call('e')).toEqual({ name: 'set_explode', args: { value: 0.5 } })
+  })
+
   it('focuses the selection, else the first tumour', () => {
     expect(call('f')).toEqual({ name: 'focus_region', args: { asset_id: 'tumor_et' } })
     store.getState().select('tumor_ncr')
@@ -92,7 +109,7 @@ describe('shortcutToCall', () => {
   it('covers every browser tool in the legend', () => {
     const tools = new Set(SHORTCUTS.map((s) => s.tool).filter(Boolean))
     expect([...tools].sort()).toEqual(
-      ['focus_region', 'hide_hemisphere', 'inspect_mri_slice', 'load_case', 'set_cutaway', 'set_opacity', 'toggle_visibility'],
+      ['focus_region', 'hide_hemisphere', 'inspect_mri_slice', 'load_case', 'set_cutaway', 'set_explode', 'set_opacity', 'toggle_visibility'],
     )
     expect(normalizeKey('C')).toBe('c')
     expect(normalizeKey('ArrowUp')).toBe('ArrowUp')

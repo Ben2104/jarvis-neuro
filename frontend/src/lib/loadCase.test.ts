@@ -1,7 +1,11 @@
 import { Mesh, Object3D } from 'three'
 import { describe, expect, it } from 'vitest'
 import { fsFetch, readSynthManifestJson, synthEntry } from '../test/fixtures'
+import { rasExtent } from './affine'
 import { CaseLoadError, fetchCase, fetchIndex } from './loadCase'
+import { tumorAssets } from './manifest'
+
+const SYNTH_BRAIN_BOX = { min: [-71, -83, -59], max: [71, 83, 59] }
 
 const BASE = '/cases/synth_001/synthetic/'
 const json = (value: unknown) => () => new Response(JSON.stringify(value))
@@ -41,6 +45,29 @@ describe('fetchCase', () => {
     for (const id of ['brain_surface', 'tumor_et', 'tumor_ncr', 'tumor_ed']) {
       expect((c.scene.getObjectByName(id) as Mesh).isMesh).toBe(true)
     }
+  })
+
+  it('measures the brain box in RAS mm from the GLB geometry', async () => {
+    const c = await fetchCase(synthEntry, { fetchFn: fsFetch() })
+    const { min, max } = c.brainBoxRas
+    const extent = rasExtent(c.frame)
+    for (let a = 0; a < 3; a++) {
+      expect(max[a]).toBeGreaterThan(min[a])
+      // Inside the volume, and no larger than it.
+      expect(min[a]).toBeGreaterThanOrEqual(extent.min[a] - 1e-3)
+      expect(max[a]).toBeLessThanOrEqual(extent.max[a] + 1e-3)
+    }
+    // Centred on the midline, around the volume centre, and enclosing every tumour.
+    expect((min[0] + max[0]) / 2).toBeCloseTo(c.manifest.midline_x_ras, 0)
+    for (const t of tumorAssets(c.manifest)) {
+      for (let a = 0; a < 3; a++) {
+        expect(t.bbox_ras[0][a]).toBeGreaterThanOrEqual(min[a])
+        expect(t.bbox_ras[1][a]).toBeLessThanOrEqual(max[a])
+      }
+    }
+    // Pin the measured numbers so a change to the baked GLB or the affine handling is noticed.
+    expect(min.map(Math.round)).toEqual(SYNTH_BRAIN_BOX.min)
+    expect(max.map(Math.round)).toEqual(SYNTH_BRAIN_BOX.max)
   })
 
   it('reports an HTTP failure with the URL', async () => {

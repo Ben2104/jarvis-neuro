@@ -88,6 +88,21 @@ describe('with synth_001 loaded', () => {
     expect(store.getState().opacity).toMatchObject({ tumor_et: 1, brain_surface: 0 })
   })
 
+  it('sets the explode amount, clamped to 0..1, and logs it', async () => {
+    expect(ok(await call('set_explode', { value: 0.4 }))).toEqual({ value: 0.4 })
+    expect(store.getState().explode).toBe(0.4)
+    expect(ok(await call('set_explode', { value: 3 })).value).toBe(1)
+    expect(ok(await call('set_explode', { value: -2 })).value).toBe(0)
+    expect(store.getState().toolLog.at(-1)).toMatchObject({ name: 'set_explode', ok: true })
+  })
+
+  it('rejects set_explode with unknown keys or a non-finite value', async () => {
+    expect(err(await call('set_explode', { value: 0.5, asset_id: 'tumor_et' }))).toMatch(/Unrecognized key/)
+    expect(err(await call('set_explode', { value: Number.NaN }))).toMatch(/value/)
+    expect(err(await call('set_explode', {}))).toMatch(/value/)
+    expect(store.getState().explode).toBe(0)
+  })
+
   it('rounds and clamps slice indices', async () => {
     expect(ok(await call('inspect_mri_slice', { axis: 'axial', index: 999 })).index).toBe(47)
     expect(ok(await call('inspect_mri_slice', { axis: 'axial', index: -5 })).index).toBe(0)

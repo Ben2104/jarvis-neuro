@@ -101,6 +101,12 @@ async function run(store: ViewerStore, call: ToolCall): Promise<ToolResult> {
       s.setHemisphere(a.value.side)
       return ok({ side: a.value.side, midline_x_ras: current.manifest.midline_x_ras })
     }
+    case 'set_explode': {
+      const a = parseArgs(schemas.set_explode, call.args)
+      if (!a.ok) return fail(a.error)
+      s.setExplode(a.value.value)
+      return ok(a.value)
+    }
     case 'toggle_visibility': {
       const a = parseArgs(schemas.toggle_visibility, call.args)
       if (!a.ok) return fail(a.error)
