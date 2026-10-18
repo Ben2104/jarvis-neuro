@@ -35,6 +35,8 @@ def load_msd_case(root: Path, name: str) -> LoadedCase:
     label_path = root / "labelsTr" / f"{name}.nii.gz"
     if label_path.exists():
         lab = nib.as_closest_canonical(nib.load(label_path))
+        if lab.shape != image.shape[:3]:
+            raise ValueError(f"MSD_SHAPE_MISMATCH: {name} labels have shape {lab.shape}, expected {image.shape[:3]}")
         if not np.allclose(lab.affine, img.affine, atol=1e-3):
             raise ValueError(f"MSD_AFFINE_MISMATCH: {name}")
         labels = remap(np.rint(np.asarray(lab.dataobj)), label_map)
