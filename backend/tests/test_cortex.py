@@ -76,3 +76,20 @@ def test_cortex_surface_keeps_largest_mesh_component(monkeypatch, reverse_windin
     assert vertices.dtype == np.float32
     assert faces.dtype == np.uint32
     assert signed_volume(vertices, faces) > 0
+
+
+@pytest.mark.parametrize("invalid", [np.nan, np.inf, -np.inf], ids=["nan", "inf", "negative_inf"])
+def test_non_finite_t1_voxel_is_treated_as_background(invalid):
+    t1, brain, _ = folded_ball()
+    expected = cortex_mask(t1, brain, np.zeros_like(brain))
+    t1[19, 33, 22] = invalid  # A dark sulcus voxel, open to the exterior.
+    original = t1.copy()
+    actual = cortex_mask(t1, brain, np.zeros_like(brain))
+    assert actual is not None
+    np.testing.assert_array_equal(actual, expected)
+    np.testing.assert_array_equal(t1, original)
+
+
+def test_all_nan_t1_returns_none():
+    _, brain, _ = folded_ball()
+    assert cortex_mask(np.full(brain.shape, np.nan), brain, np.zeros_like(brain)) is None

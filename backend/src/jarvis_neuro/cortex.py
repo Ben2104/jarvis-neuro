@@ -12,6 +12,7 @@ BRAIN_TARGET_FACES = 100_000
 
 
 def cortex_mask(t1: np.ndarray, brain: np.ndarray, tumour: np.ndarray) -> np.ndarray | None:
+    t1 = np.nan_to_num(t1, nan=0, posinf=0, neginf=0)
     values = t1[brain]
     if not values.size:
         return None

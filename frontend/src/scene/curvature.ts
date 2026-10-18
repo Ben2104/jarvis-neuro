@@ -115,7 +115,7 @@ export function concavity(positions: Float32Array, normals: Float32Array, index:
 
 /** Write sulcal RGB once; both hemisphere meshes share this geometry. */
 export function addSulcalColors(geometry: BufferGeometry): void {
-  if (geometry.getAttribute('color')) return
+  if (geometry.userData.sulcalShaded === true) return
   if (!geometry.getAttribute('normal')) geometry.computeVertexNormals()
   const p = geometry.getAttribute('position'), n = geometry.getAttribute('normal')
   const c = concavity(p.array as Float32Array, n.array as Float32Array, geometry.index?.array ?? null)
@@ -127,4 +127,5 @@ export function addSulcalColors(geometry: BufferGeometry): void {
     colors[3 * i + 2] = gyrus.b + (sulcus.b - gyrus.b) * c[i]
   }
   geometry.setAttribute('color', new BufferAttribute(colors, 3))
+  geometry.userData.sulcalShaded = true
 }
