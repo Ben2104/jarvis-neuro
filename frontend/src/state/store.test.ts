@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { fsFetch } from '../test/fixtures'
-import { TOOL_LOG_CAP, createViewerStore } from './store'
+import { TOOL_LOG_CAP, TRANSCRIPT_CAP, createViewerStore } from './store'
 
 const MASK_URL = '/cases/synth_001/synthetic/mask_u8.bin'
 
@@ -104,5 +104,29 @@ describe('viewer store', () => {
     const log = store.getState().toolLog
     expect(log).toHaveLength(TOOL_LOG_CAP)
     expect(log[0].id).toBe('t5')
+  })
+
+  it('starts with the agent offline and merges agent patches', () => {
+    const store = createViewerStore({ fetchFn: fsFetch() })
+    expect(store.getState().agent).toEqual({
+      link: 'offline',
+      detail: null,
+      busy: false,
+      speakReplies: true,
+      listening: false,
+    })
+    store.getState().setAgent({ link: 'unavailable', detail: 'MODEL_PROVIDER is not set' })
+    store.getState().setAgent({ busy: true })
+    expect(store.getState().agent).toMatchObject({ link: 'unavailable', detail: 'MODEL_PROVIDER is not set', busy: true })
+  })
+
+  it('caps the transcript', () => {
+    const store = createViewerStore({ fetchFn: fsFetch() })
+    for (let n = 0; n < TRANSCRIPT_CAP + 3; n++) {
+      store.getState().addTranscript({ id: `m${n}`, role: 'user', text: `q${n}`, at: n })
+    }
+    const t = store.getState().transcript
+    expect(t).toHaveLength(TRANSCRIPT_CAP)
+    expect(t[0].id).toBe('m3')
   })
 })

@@ -10,6 +10,26 @@ export type Hemisphere = 'left' | 'right' | 'none'
 export type ToolSource = 'agent' | 'keyboard' | 'gesture' | 'ui'
 export type WebcamStatus = 'off' | 'starting' | 'on' | 'denied' | 'unavailable'
 
+/** connecting: socket opening or waiting for the server status; unavailable: server up, no model configured. */
+export type AgentLink = 'connecting' | 'online' | 'offline' | 'unavailable'
+
+export interface AgentState {
+  link: AgentLink
+  /** Why the agent is unavailable, from the server status message. */
+  detail: string | null
+  /** True while the Orchestrator works on a turn. */
+  busy: boolean
+  speakReplies: boolean
+  listening: boolean
+}
+
+export interface TranscriptEntry {
+  id: string
+  role: 'user' | 'agent' | 'error'
+  text: string
+  at: number
+}
+
 export interface ToolLogEntry {
   id: string
   name: string
@@ -28,6 +48,7 @@ export const DEFAULT_OPACITY: Record<string, number> = {
   tumor_ed: 0.35,
 }
 export const TOOL_LOG_CAP = 50
+export const TRANSCRIPT_CAP = 50
 
 export type LoadCaseResult = { ok: true; loaded: LoadedCase } | { ok: false; error: string }
 
@@ -51,6 +72,8 @@ export interface ViewerState {
   explode: number
   gesturesOn: boolean
   webcam: { status: WebcamStatus; hands: number; error: string | null }
+  agent: AgentState
+  transcript: TranscriptEntry[]
 }
 
 export interface ViewerActions {
@@ -70,6 +93,8 @@ export interface ViewerActions {
   dismissError(): void
   setGesturesOn(on: boolean): void
   setWebcam(patch: Partial<ViewerState['webcam']>): void
+  setAgent(patch: Partial<AgentState>): void
+  addTranscript(entry: TranscriptEntry): void
 }
 
 export type Viewer = ViewerState & ViewerActions
@@ -133,6 +158,8 @@ export function createViewerStore(deps: CaseDeps = {}): ViewerStore {
     toolLog: [],
     gesturesOn: false,
     webcam: { status: 'off', hands: 0, error: null },
+    agent: { link: 'offline', detail: null, busy: false, speakReplies: true, listening: false },
+    transcript: [],
 
     async loadIndex() {
       try {
@@ -204,6 +231,8 @@ export function createViewerStore(deps: CaseDeps = {}): ViewerStore {
     dismissError: () => set({ error: null }),
     setGesturesOn: (gesturesOn) => set({ gesturesOn }),
     setWebcam: (patch) => set((s) => ({ webcam: { ...s.webcam, ...patch } })),
+    setAgent: (patch) => set((s) => ({ agent: { ...s.agent, ...patch } })),
+    addTranscript: (entry) => set((s) => ({ transcript: [...s.transcript, entry].slice(-TRANSCRIPT_CAP) })),
   }))
 }
 

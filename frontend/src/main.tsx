@@ -1,6 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { App } from './App'
+import { defaultAgentUrl, startAgent } from './agent'
 import { releaseCase } from './scene/prepare'
 import { viewerStore } from './state/store'
 import { executeTool } from './tools/execute'
@@ -18,8 +19,11 @@ async function boot() {
 }
 void boot()
 
+// Connects to the agent server and keeps retrying; the viewer works without it (spec §7).
+startAgent(viewerStore, import.meta.env.VITE_AGENT_URL || defaultAgentUrl())
+
 if (import.meta.env.DEV) {
-  // Console hook for the Task 13 smoke test and for Plan C before the WebSocket exists.
+  // Console hook for smoke tests.
   Object.assign(window, { __jarvis: { store: viewerStore, executeTool } })
 }
 
