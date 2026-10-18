@@ -1,0 +1,67 @@
+:root {
+  --bg: #0e1113;
+  --panel: #151a1d;
+  --panel2: #1c2327;
+  --border: #2c353a;
+  --text: #e6ebed;
+  --muted: #a3b0b6;
+  --accent: #5bc0ce;
+  --danger: #ff7a59;
+  --banner-bg: #1a1710;
+  --stage: #07090a;
+  --font-sans: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #edf0f1;
+    --panel: #ffffff;
+    --panel2: #f3f6f7;
+    --border: #cbd4d8;
+    --text: #14191c;
+    --muted: #4f5c62;
+    --accent: #0b6e7c;
+    --danger: #c9391c;
+    --banner-bg: #fbf3dc;
+    color-scheme: light;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.45 var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+code,
+.mono {
+  font-family: var(--font-mono);
+}
+
+button,
+input,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+.boot {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  color: var(--muted);
+}
