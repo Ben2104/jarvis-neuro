@@ -135,3 +135,17 @@ def test_explain_passes_the_question_and_the_loaded_manifest():
     ctx.set_case("synth_001", None)
     assert run(tools["explain"]("how big?")) == "13.0 mL"
     assert seen == [("how big?", "synth_001")] and bridge.calls == []
+
+
+@pytest.mark.parametrize('value', [float('inf'), float('-inf'), float('nan')])
+@pytest.mark.parametrize('name,args', [
+    ('set_opacity', ('tumor_et',)),
+    ('set_explode', ()),
+    ('set_cutaway', ('axial',)),
+    ('inspect_mri_slice', ('axial',)),
+])
+def test_scene_tools_reject_non_finite_before_forwarding(name, args, value):
+    _, bridge, tools = _setup()
+    with pytest.raises(ValueError, match='must be finite'):
+        run(tools[name](*args, value))
+    assert bridge.calls == []

@@ -1,7 +1,7 @@
 """Model provider selection from environment variables (spec §1 Stack). No provider is hard-coded."""
 import os
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from strands.models.model import Model
 
@@ -10,6 +10,15 @@ PROVIDERS = ("gemini", "anthropic")
 ANTHROPIC_DEFAULTS = {"ORCHESTRATOR_MODEL": "claude-haiku-5-5", "REASONER_MODEL": "claude-sonnet-5-5"}
 KEY_VAR = {"gemini": "GEMINI_API_KEY", "anthropic": "ANTHROPIC_API_KEY"}
 MAX_TOKENS = 1024
+DEFAULT_ALLOWED_ORIGINS = (
+    "http://localhost:5173,http://127.0.0.1:5173,http://localhost:8000,http://127.0.0.1:8000"
+)
+
+
+def allowed_origins() -> set[str]:
+    """Browser origins allowed to open the agent socket; non-browser clients may omit Origin."""
+    value = os.environ.get("AGENT_ALLOWED_ORIGINS", DEFAULT_ALLOWED_ORIGINS)
+    return {origin.strip() for origin in value.split(",") if origin.strip()}
 
 
 class ConfigError(ValueError):
@@ -21,7 +30,7 @@ class AgentSettings:
     provider: str
     orchestrator_model: str
     reasoner_model: str
-    api_key: str
+    api_key: str = field(repr=False)
 
 
 def load_settings(env: Mapping[str, str] | None = None) -> AgentSettings:

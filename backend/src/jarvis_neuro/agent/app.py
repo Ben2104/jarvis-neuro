@@ -11,12 +11,11 @@ from typing import Any
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
-from pydantic import ValidationError
 from strands.models.model import Model
 
 from .bridge import BrowserBridge
 from .cases import REPO_ROOT, CaseRepo
-from .config import AgentSettings, ConfigError, build_model, load_settings
+from .config import AgentSettings, ConfigError, allowed_origins, build_model, load_settings
 from .orchestrator import OrchestratorSession
 from .protocol import CLIENT_MESSAGE, CaseMessage, ToolResultMessage, UserMessage
 from .reasoner import make_explainer
@@ -51,44 +50,62 @@ def create_app(
 
     @app.websocket("/ws")
     async def agent_socket(socket: WebSocket) -> None:
+        origin = socket.headers.get("origin")
+        if origin is not None and origin not in allowed_origins():
+            await socket.close(code=1008)
+            return
         await socket.accept()
         send_lock = asyncio.Lock()
+        disconnected = False
 
         async def send(msg: dict[str, Any]) -> None:
+            nonlocal disconnected
             async with send_lock:
-                await socket.send_json(msg)
+                if disconnected:
+                    return
+                try:
+                    await socket.send_json(msg)
+                except (RuntimeError, WebSocketDisconnect, OSError):
+                    disconnected = True
 
         settings, problem = agent_state()
         bridge = BrowserBridge(send)
         ctx = SceneContext(bridge=bridge, repo=cases)
         session = None
         if settings:
-            session = OrchestratorSession(
-                ctx,
-                model_builder(settings, settings.orchestrator_model),
-                make_explainer(model_builder(settings, settings.reasoner_model)),
-            )
+            try:
+                session = OrchestratorSession(
+                    ctx,
+                    model_builder(settings, settings.orchestrator_model),
+                    make_explainer(model_builder(settings, settings.reasoner_model)),
+                )
+            except Exception as e:
+                problem = str(e)
         await send({"type": "status", "state": "ready" if session else "unavailable", "detail": problem})
 
         async def run_turn(msg: UserMessage) -> None:
-            await send({"type": "busy", "busy": True})
             try:
+                await send({"type": "busy", "busy": True})
                 text = await session.ask(msg.text)
                 await send({"type": "reply", "turn_id": msg.turn_id, "text": text})
+            except asyncio.CancelledError:
+                raise
             except Exception as e:  # provider down, quota, bad key: tell the user, keep the socket
                 log.exception("agent turn failed")
                 await send({"type": "error", "turn_id": msg.turn_id, "message": f"agent failed: {e}"})
             finally:
-                await send({"type": "busy", "busy": False})
+                if not disconnected and not asyncio.current_task().cancelling():
+                    await send({"type": "busy", "busy": False})
 
         turns: set[asyncio.Task[None]] = set()
         try:
             while True:
-                raw = await socket.receive_json()
                 try:
-                    msg = CLIENT_MESSAGE.validate_python(raw)
-                except ValidationError as e:
-                    await send({"type": "error", "turn_id": None, "message": f"bad message: {e.errors()[0]['msg']}"})
+                    raw = await socket.receive_text()
+                    msg = CLIENT_MESSAGE.validate_json(raw)
+                except (ValueError, KeyError) as e:
+                    detail = "binary frames are not supported; send JSON text" if isinstance(e, KeyError) else str(e)
+                    await send({"type": "error", "turn_id": None, "message": f"bad message: {detail}"})
                     continue
                 if isinstance(msg, ToolResultMessage):
                     bridge.resolve(msg.model_dump())
@@ -100,6 +117,11 @@ def create_app(
                         await send({"type": "error", "turn_id": None, "message": f"case sync failed: {e}"})
                 elif session is None:
                     await send({"type": "error", "turn_id": msg.turn_id, "message": f"agent unavailable: {problem}"})
+                elif any(not task.done() for task in turns):
+                    await send({
+                        "type": "error", "turn_id": msg.turn_id,
+                        "message": "busy: a turn is already running",
+                    })
                 else:
                     task = asyncio.create_task(run_turn(msg))
                     turns.add(task)
@@ -107,9 +129,12 @@ def create_app(
         except WebSocketDisconnect:
             pass
         finally:
+            disconnected = True
             bridge.close("the browser disconnected")
-            for task in turns:
+            pending = tuple(turns)
+            for task in pending:
                 task.cancel()
+            await asyncio.gather(*pending, return_exceptions=True)
 
     if static_dir is not None and static_dir.is_dir():
         app.mount("/", StaticFiles(directory=static_dir, html=True), name="viewer")

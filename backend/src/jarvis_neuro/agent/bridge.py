@@ -27,11 +27,14 @@ class BrowserBridge:
         self._pending[call_id] = future
         try:
             await self._send({"type": "tool_call", "id": call_id, "name": name, "args": args})
-            reply = await asyncio.wait_for(future, timeout_s)
-        except TimeoutError:
-            raise BrowserToolError(f"the browser did not answer {name} within {timeout_s:g} s") from None
+            try:
+                reply = await asyncio.wait_for(future, timeout_s)
+            except TimeoutError:
+                raise BrowserToolError(f"the browser did not answer {name} within {timeout_s:g} s") from None
         finally:
             self._pending.pop(call_id, None)
+            if future.done() and not future.cancelled():
+                future.exception()
         if reply.get("ok"):
             return reply.get("result")
         raise BrowserToolError(str(reply.get("error") or f"{name} failed in the browser"))

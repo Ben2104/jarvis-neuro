@@ -133,3 +133,146 @@ def test_the_built_viewer_is_served_when_present(tmp_path):
     client = _client(ScriptedModel([]), static_dir=tmp_path)
     assert "viewer" in client.get("/").text
     assert client.get("/api/health").json()["ok"] is True
+
+
+def test_non_json_text_keeps_socket_open():
+    with _client(ScriptedModel([[('text', 'alive')]])).websocket_connect('/ws') as ws:
+        ws.receive_json()
+        ws.send_text('not json')
+        error = ws.receive_json()
+        assert error['type'] == 'error' and error['turn_id'] is None
+        assert error['message'].startswith('bad message: ')
+        ws.send_json({'type': 'user', 'turn_id': 'next', 'text': 'hello'})
+        assert _until(ws, 'reply')['text'] == 'alive'
+
+
+def test_binary_frame_keeps_socket_open():
+    with _client(ScriptedModel([[('text', 'alive')]])).websocket_connect('/ws') as ws:
+        ws.receive_json()
+        ws.send_bytes(b'{}')
+        error = ws.receive_json()
+        assert error['type'] == 'error' and error['turn_id'] is None
+        assert error['message'].startswith('bad message: ')
+        ws.send_json({'type': 'user', 'turn_id': 'next', 'text': 'hello'})
+        assert _until(ws, 'reply')['text'] == 'alive'
+
+
+def test_evil_origin_is_rejected(monkeypatch):
+    import pytest
+    from starlette.websockets import WebSocketDisconnect
+
+    monkeypatch.delenv('AGENT_ALLOWED_ORIGINS', raising=False)
+    with pytest.raises(WebSocketDisconnect) as exc:
+        with _client(ScriptedModel([])).websocket_connect('/ws', headers={'origin': 'https://evil.example'}):
+            pass
+    assert exc.value.code == 1008
+
+
+def test_localhost_origin_is_accepted(monkeypatch):
+    monkeypatch.delenv('AGENT_ALLOWED_ORIGINS', raising=False)
+    with _client(ScriptedModel([])).websocket_connect('/ws', headers={'origin': 'http://localhost:5173'}) as ws:
+        assert ws.receive_json()['state'] == 'ready'
+
+
+def test_no_origin_is_accepted(monkeypatch):
+    monkeypatch.setenv('AGENT_ALLOWED_ORIGINS', 'https://trusted.example')
+    with _client(ScriptedModel([])).websocket_connect('/ws') as ws:
+        assert ws.receive_json()['state'] == 'ready'
+
+
+def test_origin_allowlist_from_env(monkeypatch):
+    import pytest
+    from starlette.websockets import WebSocketDisconnect
+
+    monkeypatch.setenv('AGENT_ALLOWED_ORIGINS', ' https://trusted.example , https://second.example ')
+    with _client(ScriptedModel([])).websocket_connect('/ws', headers={'origin': 'https://trusted.example'}) as ws:
+        assert ws.receive_json()['state'] == 'ready'
+    with pytest.raises(WebSocketDisconnect) as exc:
+        with _client(ScriptedModel([])).websocket_connect('/ws', headers={'origin': 'http://localhost:5173'}):
+            pass
+    assert exc.value.code == 1008
+
+
+def test_overlapping_turn_is_rejected_with_one_busy_pair():
+    model = ScriptedModel([[('tool', 'set_explode', {'value': 1})], [('text', 'done')]])
+    with _client(model).websocket_connect('/ws') as ws:
+        ws.receive_json()
+        ws.send_json({'type': 'case', 'case_id': 'synth_001', 'provenance': 'synthetic'})
+        ws.send_json({'type': 'user', 'turn_id': 'a', 'text': 'explode'})
+        ws.send_json({'type': 'user', 'turn_id': 'b', 'text': 'again'})
+        ws.send_json({'type': 'dance'})
+        messages = []
+        while (not any(m.get('message', '').startswith('bad message: ') for m in messages)
+               or not any(m['type'] == 'tool_call' for m in messages)):
+            messages.append(ws.receive_json())
+        call = next(m for m in messages if m['type'] == 'tool_call')
+        assert next((m for m in messages if m.get('turn_id') == 'b'), None) == {
+            'type': 'error', 'turn_id': 'b', 'message': 'busy: a turn is already running',
+        }
+        ws.send_json({'type': 'tool_result', 'id': call['id'], 'ok': True, 'result': {}})
+        while not any(m == {'type': 'busy', 'busy': False} for m in messages):
+            messages.append(ws.receive_json())
+        assert [m['busy'] for m in messages if m['type'] == 'busy'] == [True, False]
+        assert [m['turn_id'] for m in messages if m['type'] == 'reply'] == ['a']
+        ws.send_json({'type': 'dance'})
+        assert ws.receive_json()['message'].startswith('bad message: ')
+
+
+def test_model_builder_failure_reports_unavailable():
+    def broken_builder(settings, model_id):
+        raise RuntimeError('builder failed')
+
+    app = create_app(settings_loader=lambda: SETTINGS, model_builder=broken_builder, static_dir=None)
+    with TestClient(app).websocket_connect('/ws') as ws:
+        assert ws.receive_json() == {'type': 'status', 'state': 'unavailable', 'detail': 'builder failed'}
+        ws.send_json({'type': 'user', 'turn_id': 'a', 'text': 'hello'})
+        assert ws.receive_json() == {'type': 'error', 'turn_id': 'a', 'message': 'agent unavailable: builder failed'}
+
+
+def test_disconnect_awaits_turn_and_preserves_cancellation(monkeypatch):
+    import asyncio
+    import json
+    from jarvis_neuro.agent.orchestrator import OrchestratorSession
+
+    async def main():
+        events = asyncio.Queue()
+        for event in [
+            {'type': 'websocket.connect'},
+            {'type': 'websocket.receive', 'text': json.dumps({'type': 'user', 'turn_id': 'a', 'text': 'hello'})},
+        ]:
+            events.put_nowait(event)
+        closed = False
+        cancelled = asyncio.Event()
+        turn_tasks = []
+
+        async def ask(self, text):
+            turn_tasks.append(asyncio.current_task())
+            events.put_nowait({'type': 'websocket.disconnect', 'code': 1000})
+            try:
+                await asyncio.Future()
+            except asyncio.CancelledError:
+                cancelled.set()
+                raise
+
+        monkeypatch.setattr(OrchestratorSession, 'ask', ask)
+
+        async def receive():
+            nonlocal closed
+            event = await events.get()
+            if event['type'] == 'websocket.disconnect':
+                closed = True
+            return event
+
+        async def send(event):
+            if closed:
+                raise RuntimeError('socket already closed')
+
+        scope = {'type': 'websocket', 'path': '/ws', 'raw_path': b'/ws', 'query_string': b'',
+                 'headers': [], 'scheme': 'ws', 'server': ('test', 80), 'client': ('test', 123),
+                 'subprotocols': [], 'root_path': ''}
+        app = _client(ScriptedModel([])).app
+        await app(scope, receive, send)
+        assert cancelled.is_set(), 'disconnect must await turn cancellation'
+        assert len(turn_tasks) == 1 and turn_tasks[0].cancelled()
+
+    asyncio.run(main())

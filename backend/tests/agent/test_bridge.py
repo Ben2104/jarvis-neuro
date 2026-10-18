@@ -85,3 +85,34 @@ def test_close_fails_waiting_and_later_calls():
             await bridge.call("set_explode", {"value": 0})
 
     asyncio.run(main())
+
+
+def test_send_timeout_is_not_a_browser_timeout():
+    async def main():
+        async def send(msg):
+            raise TimeoutError('transport send timed out')
+
+        bridge = BrowserBridge(send)
+        with pytest.raises(TimeoutError, match='transport send timed out'):
+            await bridge.call('set_explode', {'value': 1})
+        assert not bridge._pending
+
+    asyncio.run(main())
+
+
+def test_send_failure_retrieves_close_exception():
+    async def main():
+        observed = []
+
+        async def send(msg):
+            observed.extend(bridge._pending.values())
+            bridge.close('disconnected during send')
+            raise RuntimeError('send failed')
+
+        bridge = BrowserBridge(send)
+        with pytest.raises(RuntimeError, match='send failed'):
+            await bridge.call('set_explode', {'value': 1})
+        assert not observed[0]._log_traceback, 'close exception must be retrieved'
+        assert not bridge._pending
+
+    asyncio.run(main())

@@ -34,3 +34,9 @@ def test_bad_environments_fail_with_a_named_variable(env, message):
 def test_build_model_sets_the_model_id_without_network(provider):
     s = AgentSettings(provider, "orch-id", "reason-id", "key")
     assert build_model(s, "orch-id").get_config()["model_id"] == "orch-id"
+
+
+def test_settings_repr_hides_api_key():
+    settings = AgentSettings('anthropic', 'orch', 'reason', 'secret-api-key')
+    assert 'secret-api-key' not in repr(settings)
+    assert 'anthropic' in repr(settings)

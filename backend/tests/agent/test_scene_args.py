@@ -44,3 +44,9 @@ def test_slice_index_rounds_half_up_and_clamps(synth):
     assert clamp_slice_index(synth, "axial", 99) == 47
     assert clamp_slice_index(synth, "sagittal", -3) == 0
     assert clamp_slice_index(synth, "coronal", 63.2) == 63
+
+
+@pytest.mark.parametrize('index', [float('inf'), float('-inf'), float('nan')])
+def test_slice_index_rejects_non_finite(synth, index):
+    with pytest.raises(ValueError, match='index must be finite'):
+        clamp_slice_index(synth, 'axial', index)

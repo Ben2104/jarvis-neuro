@@ -1,7 +1,7 @@
 """Backend validation of scene tool arguments (spec §5). Mirrors the viewer's zod schemas.
 
 Unknown asset ids raise ValueError, which Strands returns to the Orchestrator as an error tool result.
-Numeric ranges are clamped, never rejected.
+Finite numeric ranges are clamped; non-finite inputs are rejected.
 """
 import math
 
@@ -14,6 +14,8 @@ AXIS_DIM = {"sagittal": 0, "coronal": 1, "axial": 2}
 
 
 def clamp(value: float, lo: float, hi: float) -> float:
+    if not math.isfinite(value):
+        raise ValueError("value must be finite")
     return min(hi, max(lo, value))
 
 
@@ -37,6 +39,8 @@ def ras_extent(m: Manifest) -> tuple[list[float], list[float]]:
 
 
 def clamp_cut_mm(m: Manifest, plane: str, ras_mm: float) -> float:
+    if not math.isfinite(ras_mm):
+        raise ValueError("ras_mm must be finite")
     lo, hi = ras_extent(m)
     d = AXIS_DIM[plane]
     return clamp(ras_mm, lo[d], hi[d])
@@ -44,5 +48,7 @@ def clamp_cut_mm(m: Manifest, plane: str, ras_mm: float) -> float:
 
 def clamp_slice_index(m: Manifest, axis: str, index: float) -> int:
     """Round half up (JavaScript Math.round), then clamp to the slice count."""
+    if not math.isfinite(index):
+        raise ValueError("index must be finite")
     count = m.dims[AXIS_DIM[axis]]
     return int(clamp(math.floor(index + 0.5), 0, count - 1))
