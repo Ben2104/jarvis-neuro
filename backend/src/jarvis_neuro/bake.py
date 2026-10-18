@@ -35,6 +35,7 @@ def bake_case(case: LoadedCase, seg: np.ndarray, provenance: str, out_dir: Path,
     out_dir.mkdir(parents=True, exist_ok=True)
     A = case.vox2ras
     brain = brain_mask(case, seg)
+    written_seg = seg.copy()
 
     v, f = smooth_and_decimate(*mesh_from_mask(brain, A, sigma=1.0), BRAIN_TARGET_FACES)
     nodes = [("brain_surface", v, f)]
@@ -45,6 +46,7 @@ def bake_case(case: LoadedCase, seg: np.ndarray, provenance: str, out_dir: Path,
             continue
         v, f = smooth_and_decimate(*mesh_from_mask(m, A, sigma=0.5), TUMOR_TARGET_FACES)
         if len(f) == 0:
+            written_seg[m] = 0
             continue
         name = ASSET_BY_LABEL[label]
         nodes.append((name, v, f))
@@ -59,7 +61,7 @@ def bake_case(case: LoadedCase, seg: np.ndarray, provenance: str, out_dir: Path,
     if draco:
         draco_compress(out_dir / "case.glb")
     write_bin(window_to_u8(case.image[..., case.modalities["flair"]], brain), out_dir / "flair_u8.bin")
-    write_bin(seg, out_dir / "mask_u8.bin")
+    write_bin(written_seg, out_dir / "mask_u8.bin")
 
     dice = None
     if gt is not None:

@@ -82,6 +82,25 @@ def test_empty_label_is_omitted(tmp_path):
     assert "tumor_et" not in {a.id for a in m.assets}
 
 
+def test_vanishing_label_is_omitted_from_assets_and_written_mask(tmp_path):
+    case = load_msd_case(make_synthetic_msd(tmp_path / "msd"), SYNTH_NAME)
+    seg = case.labels.copy()
+    seg[seg == 3] = 2
+    voxel = (27, 32, 24)
+    seg[voxel] = 3  # A single voxel blurs below the 0.5 isosurface threshold.
+    before = seg.copy()
+    out = tmp_path / "out"
+    m = bake_case(case, seg, "synthetic", out)
+    assert "tumor_et" not in {a.id for a in m.assets}
+    scene = trimesh.load(out / "case.glb", force="scene")
+    assert "tumor_et" not in scene.graph.nodes_geometry
+    written = np.fromfile(out / "mask_u8.bin", np.uint8).reshape(m.dims)
+    expected = before.copy()
+    expected[expected == 3] = 0
+    np.testing.assert_array_equal(written, expected)
+    np.testing.assert_array_equal(seg, before)
+
+
 def test_cli_synthetic_writes_index(tmp_path):
     main(["synthetic", "--out", str(tmp_path)])
     idx = json.loads((tmp_path / "index.json").read_text())
