@@ -10,13 +10,19 @@ dependencies = [
   "trimesh>=4.4",
   "fast-simplification>=0.1.7",
   "pydantic>=2.7",
+  "fastapi>=0.143",
+  "uvicorn[standard]>=0.54",
+  "strands-agents[anthropic,gemini]>=1.61",
 ]
 
 [project.optional-dependencies]
 monai = ["monai>=1.4", "torch>=2.4"]
 
 [dependency-groups]
-dev = ["pytest>=8"]
+dev = [
+    "httpx>=0.28",
+    "pytest>=8",
+]
 
 [build-system]
 requires = ["hatchling"]
