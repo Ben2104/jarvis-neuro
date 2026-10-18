@@ -13,6 +13,17 @@ def test_channels_to_labels_uses_named_order():
     assert channels_to_labels(prob, ("tc", "wt", "et")).tolist() == [ED, NCR, ET, NCR, ED]
 
 
+def test_channels_to_labels_refuses_unverified_default_order():
+    with pytest.raises(ValueError, match="MONAI_OUTPUT_ORDER"):
+        channels_to_labels(np.zeros((3, 5)))
+
+
+@pytest.mark.parametrize("order", [(), ("tc", "wt"), ("tc", "et"), ("wt", "et")])
+def test_channels_to_labels_refuses_missing_output_channels(order):
+    with pytest.raises(ValueError, match="MONAI_OUTPUT_ORDER"):
+        channels_to_labels(np.zeros((3, 5)), order)
+
+
 def test_order_channels_refuses_unset_order():
     with pytest.raises(ValueError, match="MONAI_INPUT_ORDER"):
         order_channels(np.zeros((2, 2, 2, 4)), {"flair": 0}, ())

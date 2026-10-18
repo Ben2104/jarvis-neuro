@@ -10,11 +10,14 @@ from .labels import exclusive_from_channels
 
 BUNDLE = "brats_mri_segmentation"
 INPUT_ORDER: tuple[str, ...] = ()                    # set from metadata.json in step 5; empty refuses to run
-OUTPUT_ORDER: tuple[str, ...] = ("tc", "wt", "et")   # confirm in step 5
+OUTPUT_ORDER: tuple[str, ...] = ()                   # set from metadata.json in step 5; empty refuses to run
 
 
 def channels_to_labels(prob: np.ndarray, output_order: tuple[str, ...] = OUTPUT_ORDER,
                        threshold: float = 0.5) -> np.ndarray:
+    missing = sorted({"tc", "wt", "et"} - set(output_order))
+    if not output_order or missing:
+        raise ValueError(f"MONAI_OUTPUT_ORDER: set OUTPUT_ORDER from the bundle metadata (missing {missing})")
     ch = {name: prob[i] > threshold for i, name in enumerate(output_order)}
     return exclusive_from_channels(ch["tc"], ch["wt"], ch["et"])
 
