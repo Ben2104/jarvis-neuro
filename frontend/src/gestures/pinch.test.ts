@@ -1,18 +1,29 @@
 import { describe, expect, it } from 'vitest'
 import { makeHand } from '../test/hands'
 import type { GestureEvent } from './bus'
-import { GESTURE_CONFIG, type GestureState, type Landmark, initialGestureState, stepGesture } from './pinch'
+import {
+  GESTURE_CONFIG,
+  type GestureState,
+  type Landmark,
+  classifyPose,
+  initialGestureState,
+  openness,
+  stepGesture,
+} from './pinch'
 
-function run(frames: Landmark[][][], start: GestureState = initialGestureState(), cfg = GESTURE_CONFIG) {
+const FRAME_MS = 33
+
+/** Runs frames through the reducer, `dt` ms apart. */
+function run(frames: Landmark[][][], start: GestureState = initialGestureState(), cfg = GESTURE_CONFIG, dt = FRAME_MS) {
   let state = start
   const events: GestureEvent[][] = []
   const pinched: boolean[] = []
-  for (const hands of frames) {
-    const r = stepGesture(state, hands, cfg)
+  frames.forEach((hands, i) => {
+    const r = stepGesture(state, hands, i * dt, cfg)
     state = r.state
     events.push(r.events)
     pinched.push(state.pinched)
-  }
+  })
   const all = events.flat()
   const of = <T extends GestureEvent['type']>(t: T) => all.filter((e): e is Extract<GestureEvent, { type: T }> => e.type === t)
   return { state, events, pinched, of }
@@ -20,96 +31,154 @@ function run(frames: Landmark[][][], start: GestureState = initialGestureState()
 
 const oneHand = (spec: Parameters<typeof makeHand>[0]) => [makeHand(spec)]
 const flips = (xs: boolean[]) => xs.slice(1).filter((v, i) => v !== xs[i]).length
+const sharp = { ...GESTURE_CONFIG, alpha: 1 }
+const times = <T,>(n: number, v: T): T[] => Array.from({ length: n }, () => v)
+
+describe('classifyPose and openness', () => {
+  it('reads open, point, fist and pinch from the finger layout', () => {
+    expect(classifyPose(makeHand({ pose: 'open' }), false)).toBe('open')
+    expect(classifyPose(makeHand({ pose: 'point' }), false)).toBe('point')
+    expect(classifyPose(makeHand({ pose: 'fist' }), false)).toBe('fist')
+    expect(classifyPose(makeHand({ pose: 'open', pinch: 0.1 }), true)).toBe('pinch')
+  })
+
+  it("calls a partly curled hand 'other'", () => {
+    const h = makeHand({ pose: 'open' })
+    h[12] = { ...h[10] } // middle finger folded onto its PIP
+    expect(classifyPose(h, false)).toBe('other')
+  })
+
+  it('grows with how far the fingers are spread', () => {
+    const o = (spread: number) => openness(makeHand({ spread }))
+    expect(o(1.1)).toBeLessThan(o(1.5))
+    expect(o(1.5)).toBeLessThan(o(1.9))
+    expect(o(1.5)).toBeCloseTo(1.5, 1)
+  })
+})
 
 describe('pinch hysteresis', () => {
-  it('does not flicker on a jittery distance sequence and selects once', () => {
+  it('does not flicker on a jittery distance sequence and starts a pinch once', () => {
     const jitter = [0.22, 0.38, 0.22, 0.38, 0.22, 0.38, 0.24, 0.36, 0.22, 0.4, 0.25, 0.37]
     const ratios = [0.8, 0.8, 0.8, ...jitter, 0.8, 0.8, 0.8, 0.8]
     const r = run(ratios.map((pinch) => oneHand({ pinch })))
 
     expect(flips(r.pinched)).toBe(2)
     expect(r.pinched.at(-1)).toBe(false)
-    expect(r.of('select')).toHaveLength(1)
+    expect(r.of('pinchStart')).toHaveLength(1)
+    expect(r.of('pinchEnd')).toHaveLength(1)
   })
 
-  it('selects again on a second pinch', () => {
+  it('pinches again on a second pinch', () => {
     const ratios = [0.8, 0.8, 0.1, 0.1, 0.1, 0.8, 0.8, 0.8, 0.1, 0.1, 0.1]
-    expect(run(ratios.map((pinch) => oneHand({ pinch }))).of('select')).toHaveLength(2)
+    expect(run(ratios.map((pinch) => oneHand({ pinch }))).of('pinchStart')).toHaveLength(2)
   })
 
-  it('a held pinch fires one select and no hover or rotate', () => {
-    const r = run([
-      oneHand({ pinch: 1, x: 0.5 }),
-      ...[0.1, 0.1, 0.1, 0.1, 0.1].map((pinch, i) => oneHand({ pinch, x: 0.5 - i * 0.02 })),
-    ], initialGestureState(), { ...GESTURE_CONFIG, alpha: 1 })
-    expect(r.of('select')).toHaveLength(1)
-    expect(r.events.slice(1).flat().filter((e) => e.type === 'hover')).toHaveLength(0)
-    expect(r.of('rotate')).toHaveLength(0)
-  })
-
-  it('selects at the mirrored pinch point in NDC', () => {
-    const r = run([
-      oneHand({ x: 0.3, y: 0.5, pinch: 1 }),
-      oneHand({ x: 0.3, y: 0.5, pinch: 0.1 }),
-    ], initialGestureState(), { ...GESTURE_CONFIG, alpha: 1 })
-    const [sel] = r.of('select')
-    expect(sel.ndc[0]).toBeCloseTo(0.4, 6)
-    expect(sel.ndc[1]).toBeCloseTo(0.36, 6)
+  it('starts at the mirrored index fingertip in NDC', () => {
+    const r = run([oneHand({ x: 0.3, y: 0.5, pinch: 1 }), oneHand({ x: 0.3, y: 0.5, pinch: 0.1 })], initialGestureState(), sharp)
+    const [start] = r.of('pinchStart')
+    const tip = makeHand({ x: 0.3, y: 0.5, pinch: 0.1 })[8]
+    expect(start.ndc[0]).toBeCloseTo(1 - 2 * tip.x, 6)
+    expect(start.ndc[1]).toBeCloseTo(1 - 2 * tip.y, 6)
   })
 })
 
-describe('open hand', () => {
-  it('hovers at the pointer and rotates with palm motion', () => {
-    // Raw image x decreasing = the hand moving to the user's right in a mirrored view.
-    const r = run([0.6, 0.58, 0.56, 0.54].map((x) => oneHand({ x })))
-    expect(r.of('hover')).toHaveLength(4)
-    const rotates = r.of('rotate')
-    expect(rotates).toHaveLength(3)
-    expect(rotates.every((e) => e.dx > 0 && Math.abs(e.dy) < 1e-9)).toBe(true)
+describe('hover', () => {
+  it('is emitted on every one-hand frame with the pose, also while pinched', () => {
+    const r = run([
+      oneHand({ pose: 'point' }),
+      oneHand({ pose: 'fist' }),
+      oneHand({ pose: 'open', pinch: 1 }),
+      oneHand({ pose: 'open', pinch: 0.1 }),
+      oneHand({ pose: 'open', pinch: 0.1 }),
+    ], initialGestureState(), sharp)
+    expect(r.of('hover').map((e) => e.pose)).toEqual(['point', 'fist', 'open', 'pinch', 'pinch'])
   })
 
-  it('does not rotate while the hand is still', () => {
-    expect(run([0, 0, 0, 0].map(() => oneHand({}))).of('rotate')).toHaveLength(0)
+  it('follows the mirrored index fingertip', () => {
+    const r = run([oneHand({ x: 0.6, pose: 'point' })], initialGestureState(), sharp)
+    const tip = makeHand({ x: 0.6, pose: 'point' })[8]
+    const [hover] = r.of('hover')
+    expect(hover.ndc[0]).toBeCloseTo(1 - 2 * tip.x, 6)
+    expect(hover.ndc[1]).toBeCloseTo(1 - 2 * tip.y, 6)
   })
 })
 
-describe('pinch-drag explode', () => {
-  const cfg = { ...GESTURE_CONFIG, alpha: 1 }
-  const held = (ys: number[]) => [oneHand({ pinch: 1, y: ys[0] }), ...ys.map((y) => oneHand({ pinch: 0.1, y }))]
+describe('pinch tap and drag', () => {
+  const still = (n: number) => times(n, oneHand({ pinch: 0.1 }))
+  const open = oneHand({ pinch: 1 })
 
-  it('emits a positive delta as a held pinch moves up and a negative one as it moves down', () => {
-    // Raw image y decreasing = the hand moving up on screen.
-    const up = run(held([0.6, 0.55, 0.5, 0.45]), initialGestureState(), cfg).of('explode')
-    expect(up).toHaveLength(3)
-    expect(up.every((e) => e.delta > 0)).toBe(true)
-    // toNdc sums two landmarks, so 0.05 of image height is 0.1 NDC.
-    expect(up[0].delta).toBeCloseTo(0.1 * GESTURE_CONFIG.explodeGain, 6)
-    const down = run(held([0.45, 0.5, 0.55, 0.6]), initialGestureState(), cfg).of('explode')
-    expect(down.length).toBeGreaterThan(0)
-    expect(down.every((e) => e.delta < 0)).toBe(true)
+  it('a pinch held still and released fast is one tap and never drags', () => {
+    const r = run([open, ...still(2), open], initialGestureState(), sharp)
+    expect(r.of('pinchEnd')).toHaveLength(1)
+    expect(r.of('pinchEnd')[0].tap).toBe(true)
+    expect(r.of('drag')).toHaveLength(0)
   })
 
-  it('emits nothing without a pinch', () => {
-    const r = run([0.6, 0.5, 0.4, 0.3].map((y) => oneHand({ pinch: 1, y })), initialGestureState(), cfg)
+  it('a pinch moved 0.1 NDC drags by about that much and is not a tap', () => {
+    // 0.05 of image width is 0.1 NDC; x grows to the right in the image, so NDC x falls.
+    const moved = [0.5, 0.52, 0.54, 0.56, 0.58, 0.6].map((x) => oneHand({ x, pinch: 0.1 }))
+    const r = run([oneHand({ x: 0.5, pinch: 1 }), ...moved, oneHand({ x: 0.6, pinch: 1 })], initialGestureState(), sharp)
+    const drags = r.of('drag')
+    expect(drags.length).toBeGreaterThan(0)
+    expect(drags.reduce((sum, e) => sum + e.dx, 0)).toBeCloseTo(-0.2, 6)
+    expect(drags.reduce((sum, e) => sum + e.dy, 0)).toBeCloseTo(0, 6)
+    expect(r.of('pinchEnd')[0].tap).toBe(false)
+  })
+
+  it('a pinch held longer than 300 ms is not a tap', () => {
+    const r = run([open, ...still(12), open], initialGestureState(), sharp)
+    expect(r.of('pinchEnd')[0].tap).toBe(false)
+  })
+
+  it('ignores motion below the drag deadzone', () => {
+    const tiny = GESTURE_CONFIG.dragDeadzone / 8 // in image width; NDC is twice that
+    const r = run([open, ...[0, 1, 2, 3].map((i) => oneHand({ x: 0.5 + i * tiny, pinch: 0.1 }))], initialGestureState(), sharp)
+    expect(r.of('drag')).toHaveLength(0)
+  })
+
+  it('does not drag on the frame the pinch starts', () => {
+    const r = run([oneHand({ x: 0.3, pinch: 1 }), oneHand({ x: 0.7, pinch: 0.1 })], initialGestureState(), sharp)
+    expect(r.of('pinchStart')).toHaveLength(1)
+    expect(r.of('drag')).toHaveLength(0)
+  })
+})
+
+describe('open hand explode', () => {
+  const open = (spread: number, n = 3) => times(n, oneHand({ pose: 'open', spread }))
+
+  it('maps how far the hand is open to an absolute amount', () => {
+    expect(run(open(1.9)).of('explode').at(-1)?.amount).toBeCloseTo(1, 1)
+    expect(run(open(1.1)).of('explode').at(-1)?.amount).toBeCloseTo(0, 1)
+    expect(run(open(1.5)).of('explode').at(-1)?.amount).toBeCloseTo(0.5, 1)
+  })
+
+  it('waits for three open frames', () => {
+    expect(run(open(1.9, 2)).of('explode')).toHaveLength(0)
+    expect(run(open(1.9, 3)).of('explode')).toHaveLength(1)
+  })
+
+  it('follows the hand as it opens further, and stays quiet within the deadzone', () => {
+    const r = run([...open(1.3), ...open(1.7, 2), ...open(1.7, 3)], initialGestureState(), sharp)
+    const amounts = r.of('explode').map((e) => e.amount)
+    expect(amounts.at(-1)).toBeCloseTo(0.75, 1)
+    expect(new Set(amounts.map((a) => a.toFixed(3))).size).toBe(amounts.length)
+  })
+
+  it('holds the amount when the hand switches to a point', () => {
+    const r = run([...open(1.9), ...times(6, oneHand({ pose: 'point' }))])
+    expect(r.of('explode')).toHaveLength(1)
+  })
+
+  it('a fist for three frames closes once, and staying in the fist adds nothing', () => {
+    const fist = times(8, oneHand({ pose: 'fist' }))
+    const r = run([...open(1.9), ...fist])
+    expect(r.of('explode').map((e) => e.amount.toFixed(1))).toEqual(['1.0', '0.0'])
+    expect(run(fist.slice(0, 2)).of('explode')).toHaveLength(0)
+  })
+
+  it('a pinch emits no explode', () => {
+    const r = run([oneHand({ pinch: 1 }), ...times(6, oneHand({ pinch: 0.1 }))], initialGestureState(), sharp)
     expect(r.of('explode')).toHaveLength(0)
-    expect(r.of('rotate').length).toBeGreaterThan(0)
-  })
-
-  it('ignores vertical motion below the deadzone', () => {
-    const tiny = GESTURE_CONFIG.explodeDeadzone / 4
-    const r = run(held([0.5, 0.5 - tiny, 0.5 - 2 * tiny, 0.5 - 3 * tiny]), initialGestureState(), cfg)
-    expect(r.of('select')).toHaveLength(1)
-    expect(r.of('explode')).toHaveLength(0)
-  })
-
-  it('does not explode on the frame the pinch starts, and still selects once', () => {
-    const r = run([oneHand({ pinch: 1, y: 0.6 }), oneHand({ pinch: 0.1, y: 0.4 })], initialGestureState(), cfg)
-    expect(r.of('select')).toHaveLength(1)
-    expect(r.of('explode')).toHaveLength(0)
-  })
-
-  it('does not rotate while a pinch drags', () => {
-    expect(run(held([0.6, 0.5, 0.4]), initialGestureState(), cfg).of('rotate')).toHaveLength(0)
   })
 })
 
@@ -121,29 +190,35 @@ describe('two hands', () => {
     expect(apart.of('zoom').every((e) => e.scale > 1)).toBe(true)
     const closer = run([0.4, 0.3, 0.2].map(pair))
     expect(closer.of('zoom').every((e) => e.scale < 1)).toBe(true)
-    expect(apart.of('rotate')).toHaveLength(0)
+  })
+
+  it('emits no hover, drag or explode', () => {
+    const pair = [makeHand({ x: 0.3 }), makeHand({ x: 0.7 })]
+    const r = run(times(6, pair))
+    expect(r.of('hover')).toHaveLength(0)
+    expect(r.of('drag')).toHaveLength(0)
+    expect(r.of('explode')).toHaveLength(0)
   })
 })
 
 describe('tracking changes', () => {
-  it('does not select again after a dropout while still pinched', () => {
-    const open = oneHand({ pinch: 1 })
-    const pinch = oneHand({ pinch: 0.1 })
-    const r = run([open, pinch, pinch, [], pinch, pinch], initialGestureState(), { ...GESTURE_CONFIG, alpha: 1 })
-    expect(r.of('select')).toHaveLength(1)
+  const open = oneHand({ pinch: 1 })
+  const pinch = oneHand({ pinch: 0.1 })
+
+  it('does not start a pinch again after a dropout while still pinched', () => {
+    const r = run([open, pinch, pinch, [], pinch, pinch], initialGestureState(), sharp)
+    expect(r.of('pinchStart')).toHaveLength(1)
+    expect(r.of('pinchEnd')).toHaveLength(0)
   })
 
-  it('does not select again after two hands while still pinched', () => {
-    const open = oneHand({ pinch: 1 })
-    const pinch = oneHand({ pinch: 0.1 })
+  it('does not start a pinch again after two hands while still pinched', () => {
     const pair = [makeHand({ x: 0.3 }), makeHand({ x: 0.7 })]
-    const r = run([open, pinch, pair, pinch], initialGestureState(), { ...GESTURE_CONFIG, alpha: 1 })
-    expect(r.of('select')).toHaveLength(1)
+    const r = run([open, pinch, pair, pinch], initialGestureState(), sharp)
+    expect(r.of('pinchStart')).toHaveLength(1)
   })
 
-  it('does not select a hand that appears already pinched', () => {
-    const r = run([0.1, 0.1, 0.1].map((pinch) => oneHand({ pinch })))
-    expect(r.of('select')).toHaveLength(0)
+  it('does not pinch with a hand that appears already pinched', () => {
+    expect(run(times(3, pinch)).of('pinchStart')).toHaveLength(0)
   })
 
   it('emits lost once when the hand disappears and resets the state', () => {
@@ -152,9 +227,9 @@ describe('tracking changes', () => {
     expect(r.state).toEqual(initialGestureState())
   })
 
-  it('does not jump-rotate when coming back to one hand', () => {
+  it('does not drag when coming back to one hand', () => {
     const r = run([oneHand({ x: 0.7 }), [makeHand({ x: 0.3 }), makeHand({ x: 0.7 })], oneHand({ x: 0.3 })])
     expect(r.of('lost')).toHaveLength(1)
-    expect(r.events[2].some((e) => e.type === 'rotate')).toBe(false)
+    expect(r.events[2].some((e) => e.type === 'drag')).toBe(false)
   })
 })

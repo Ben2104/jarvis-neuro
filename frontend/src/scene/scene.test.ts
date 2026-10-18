@@ -9,7 +9,7 @@ import { loadSynth } from '../test/fixtures'
 import { cutawayPlane, hemispherePlane } from './clipping'
 import { assetBox } from './focus'
 import { HOVER_EMISSIVE, SELECTED_EMISSIVE, addFresnelRim } from './materials'
-import { isClippedAway, pickPart } from './picking'
+import { isClippedAway, pickPart, rayHitsBrain } from './picking'
 import { type PreparedCase, prepareCase, releaseCase } from './prepare'
 import { type SceneView, applyViewState, sceneOffset } from './viewState'
 
@@ -350,6 +350,29 @@ describe('pickPart', () => {
         expect(pickPart(rayAt(60), p)?.assetId).toBe('region_x')
       })
     })
+  })
+})
+
+describe('rayHitsBrain', () => {
+  const through = (x: number) => {
+    const from = v3(rasToScene(c.frame, [x, 218, 3]))
+    const to = v3(rasToScene(c.frame, [x, 18, 3]))
+    return new Raycaster(from, to.sub(from).normalize())
+  }
+
+  it('is true for a ray through the case bounds, even though the brain mesh itself is never hit', () => {
+    applyViewState(p, c, defaults())
+    expect(rayHitsBrain(through(-24), p)).toBe(true)
+  })
+
+  it('is false for a ray far beside the case', () => {
+    expect(rayHitsBrain(through(900), p)).toBe(false)
+  })
+
+  it('ignores hidden parts', () => {
+    applyViewState(p, c, { ...defaults(), visible: Object.fromEntries(p.parts.map((x) => [x.assetId, false])) })
+    expect(rayHitsBrain(through(-24), p)).toBe(false)
+    applyViewState(p, c, defaults())
   })
 })
 

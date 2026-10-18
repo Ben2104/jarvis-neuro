@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { tumorAssets } from '../lib/manifest'
+import { HandOverlay } from '../gestures/HandOverlay'
 import { Viewer } from '../scene/Viewer'
 import { useViewer } from '../state/store'
 import { WebcamBackdrop } from './WebcamBackdrop'
@@ -22,6 +23,7 @@ export function ViewportPanel({ children }: { children?: ReactNode }) {
     <section className="panel stage viewport" aria-label="3D viewport">
       <WebcamBackdrop />
       <Viewer />
+      {gesturesOn && <HandOverlay />}
       <div className="overlay top-left">
         <span className="chip">3D view</span>
         {cutaway.plane !== 'none' && (

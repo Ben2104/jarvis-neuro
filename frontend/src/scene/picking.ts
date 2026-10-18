@@ -1,4 +1,4 @@
-import type { Material, Object3D, Raycaster, Vector3 } from 'three'
+import { Box3, type Material, type Object3D, type Raycaster, type Vector3 } from 'three'
 import type { PreparedCase } from './prepare'
 
 export interface PickHit {
@@ -26,4 +26,15 @@ export function pickPart(raycaster: Raycaster, p: PreparedCase): PickHit | null 
     region ??= picked
   }
   return region
+}
+
+/**
+ * True when the ray passes through the bounds of the visible parts. brain_surface is never ray-hit (rays must reach
+ * the tumours inside), so "the reticle is on the brain" is this bounding-box test.
+ */
+export function rayHitsBrain(raycaster: Raycaster, p: PreparedCase): boolean {
+  p.root.updateMatrixWorld(true)
+  const box = new Box3()
+  for (const { mesh } of p.parts) if (mesh.visible) box.union(new Box3().setFromObject(mesh))
+  return !box.isEmpty() && raycaster.ray.intersectsBox(box)
 }

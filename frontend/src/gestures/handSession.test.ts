@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { createViewerStore } from '../state/store'
 import { deferred, fakeEnv, fakeLandmarker, fakeStream, settle } from '../test/camera'
+import { makeHand } from '../test/hands'
+import { type GestureEvent, gestureBus } from './bus'
+import { toMirroredNdc } from './handDraw'
 import { getWebcamFeed, setWebcamFeed } from './webcamStream'
 import { startHandSession } from './handSession'
 
@@ -158,6 +161,53 @@ describe('startHandSession', () => {
       expect(track.stop).toHaveBeenCalledTimes(1)
       expect(lm.close).toHaveBeenCalledTimes(1)
       expect(run.hasFrame()).toBe(false)
+    })
+  })
+
+  describe('gesture frames', () => {
+    async function track(frames: Parameters<typeof makeHand>[0][][], nowAt: (i: number) => number) {
+      const store = createViewerStore()
+      const events: GestureEvent[] = []
+      const off = gestureBus.on((e) => events.push(e))
+      let i = 0
+      let clock = 0
+      const lm = fakeLandmarker(() => ({ landmarks: (frames[i++] ?? []).map((spec) => makeHand(spec)) }))
+      const run = fakeEnv({ createLandmarker: async () => lm, now: () => clock })
+      startHandSession(store, run.env)
+      await settle()
+      for (let f = 0; f < frames.length; f++) {
+        clock = nowAt(f)
+        run.frame()
+      }
+      off()
+      return events
+    }
+
+    it('emits the mirrored landmarks of every hand before that frame\'s gesture events', async () => {
+      const specs = [[{ x: 0.3 }, { x: 0.7 }]]
+      const events = await track(specs, () => 0)
+      const [first] = events
+      expect(first.type).toBe('landmarks')
+      if (first.type !== 'landmarks') return
+      expect(first.hands).toHaveLength(2)
+      expect(first.hands[0]).toHaveLength(21)
+      expect(first.hands[0]).toEqual(makeHand({ x: 0.3 }).map(toMirroredNdc))
+    })
+
+    it('emits an empty landmarks event when no hand is visible', async () => {
+      const events = await track([[{}], []], () => 0)
+      expect(events.filter((e) => e.type === 'landmarks').map((e) => e.type === 'landmarks' && e.hands.length)).toEqual([1, 0])
+    })
+
+    it('hands the reducer the env clock, so a quick pinch is a tap and a slow one is not', async () => {
+      const pinch = (p: number) => [{ pinch: p }]
+      const frames = [pinch(1), pinch(1), pinch(0.05), pinch(0.05), pinch(0.05), pinch(1), pinch(1)]
+      const tapOf = async (stepMs: number) => {
+        const events = await track(frames, (i) => i * stepMs)
+        return events.find((e) => e.type === 'pinchEnd')
+      }
+      expect(await tapOf(20)).toMatchObject({ type: 'pinchEnd', tap: true })
+      expect(await tapOf(1000)).toMatchObject({ type: 'pinchEnd', tap: false })
     })
   })
 })
