@@ -55,7 +55,7 @@ Open your hand before pinching: a pinch only selects after the hand has been see
 
 `src/agent/` connects to the agent server (`../backend`, `uv run uvicorn jarvis_neuro.agent.app:app --port 8000`) over one WebSocket. `npm run dev` proxies `/ws` and `/api` to port 8000; `VITE_AGENT_URL` overrides the socket URL. The socket reconnects with backoff (0.5 s doubling to 10 s). Mouse, keyboard and gestures never wait for it.
 
-The Agent console shows the link state (online, connecting, offline, unavailable with the server's reason on hover), the conversation, a text box, a mic button (`v`) and a "Speak replies" switch. Voice uses the Web Speech API: Chrome sends the audio to Google's servers for recognition; replies are read out with `speechSynthesis`. Where speech recognition is missing, the mic is disabled and the text box works.
+The Agent console shows the link state (online, connecting, offline, unavailable with the server's reason on hover), the conversation, a text box, a mic button (`v`) and a "Speak replies" switch. Voice uses the Web Speech API: Chrome sends the audio to Google's servers for recognition; replies are read out with `speechSynthesis`. The mic is disabled while the agent is not online and where speech recognition is missing; the text box works either way.
 
 In the console, Send and Enter submission are disabled while a turn is running; the draft is kept. Voice (`v`) only starts while the agent is online, and listening stops if the link drops. Unchecking "Speak replies" stops speech in progress.
 
