@@ -18,7 +18,7 @@ npm run build      # dist/
 
 `npm run dev` and `npm run build` first run `scripts/vendor.mjs`. It copies the Draco decoder and the MediaPipe wasm into `public/` and downloads the hand model (`public/mediapipe/hand_landmarker.task`) once. All three are gitignored. Without network access the model download is skipped: the viewer still runs and gesture mode reports `Webcam unavailable`.
 
-Cases come from the bake pipeline (`../pipeline`, Plan A). The viewer reads `public/cases/index.json` and, per case, `manifest.json`, `case.glb`, `flair_u8.bin` and `mask_u8.bin`. The manifest schema lives in `../shared/manifest.schema.json`, and `src/lib/manifest.ts` mirrors it with zod. Change both together.
+Cases come from the bake pipeline (`../backend`, Plan A). The viewer reads `public/cases/index.json` and, per case, `manifest.json`, `case.glb`, `flair_u8.bin` and `mask_u8.bin`. The manifest schema lives in `../shared/manifest.schema.json`, and `src/lib/manifest.ts` mirrors it with zod. Change both together.
 
 ## Controls
 
@@ -32,7 +32,7 @@ Cases come from the bake pipeline (`../pipeline`, Plan A). The viewer reads `pub
 | `[` `]` | brain surface opacity −0.1 / +0.1 |
 | `c` | cutaway: off → axial → coronal → sagittal → off |
 | `h` | hide hemisphere: none → left → right → none |
-| `f` | focus the selected sub-region |
+| `f` | focus the selected sub-region (the first tumour sub-region if none is selected) |
 | `b` / `t` | toggle brain surface / all tumour sub-regions |
 | `n` | next case in the index |
 | `g` | webcam gesture mode on/off |
@@ -62,7 +62,6 @@ Tools: `load_case`, `set_opacity`, `focus_region`, `set_cutaway`, `hide_hemisphe
 ## Known limits
 
 - `focus_region` on a tumour sub-region also selects it, which moves the marker and the MRI slice to its centroid.
-
 - The 2D slice orientation (radiological: patient right on screen left) is verified on the synthetic case only. Re-check it on a real MSD case (spec §9). It is set in one place: `slicePixelToVoxel` / `voxelToSlicePixel` in `src/lib/volume.ts`.
 - The opacity and cutaway sliders write the store directly and do not appear in the Agent console. Their keyboard and agent equivalents do.
 
