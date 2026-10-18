@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react'
 import { useViewer, viewerStore } from '../state/store'
 import { gestureBus } from './bus'
 import { type GestureState, initialGestureState, stepGesture } from './pinch'
+import { setWebcamFeed } from './webcamStream'
 
 export const MEDIAPIPE_WASM = '/mediapipe/wasm'
 export const HAND_MODEL = '/mediapipe/hand_landmarker.task'
@@ -37,6 +38,7 @@ export function useHandTracking(): void {
       stream?.getTracks().forEach((t) => t.stop())
       landmarker?.close()
       video.srcObject = null
+      setWebcamFeed(null)
       gesture.current = initialGestureState()
       gestureBus.emit({ type: 'lost' })
     }
@@ -61,6 +63,7 @@ export function useHandTracking(): void {
       try {
         video.srcObject = stream
         await video.play()
+        if (!cancelled) setWebcamFeed({ stream, width: video.videoWidth, height: video.videoHeight })
         const fileset = await FilesetResolver.forVisionTasks(MEDIAPIPE_WASM)
         try {
           landmarker = await HandLandmarker.createFromOptions(fileset, {
@@ -84,6 +87,7 @@ export function useHandTracking(): void {
       onVideoEnded = () => {
         if (cancelled) return
         setWebcam({ status: 'unavailable', hands: 0, error: 'camera stopped' })
+        setWebcamFeed(null)
         gestureBus.emit({ type: 'lost' })
         cancelAnimationFrame(raf)
       }
@@ -100,6 +104,7 @@ export function useHandTracking(): void {
           } catch (e) {
             if (!cancelled) {
               setWebcam({ status: 'unavailable', hands: 0, error: `hand tracking stopped: ${messageOf(e)}` })
+              setWebcamFeed(null)
               gestureBus.emit({ type: 'lost' })
             }
             return

@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { tumorAssets } from '../lib/manifest'
 import { Viewer } from '../scene/Viewer'
 import { useViewer } from '../state/store'
+import { WebcamBackdrop } from './WebcamBackdrop'
 import { TUMOR_LABEL, fmtMm, fmtVec } from './format'
 
 export function ViewportPanel({ children }: { children?: ReactNode }) {
@@ -19,6 +20,7 @@ export function ViewportPanel({ children }: { children?: ReactNode }) {
 
   return (
     <section className="panel stage viewport" aria-label="3D viewport">
+      <WebcamBackdrop />
       <Viewer />
       <div className="overlay top-left">
         <span className="chip">3D view</span>

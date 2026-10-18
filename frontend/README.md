@@ -37,7 +37,7 @@ Cases come from the bake pipeline (`../backend`, Plan A). The viewer reads `publ
 | `n` | next case in the index |
 | `g` | webcam gesture mode on/off |
 
-Gesture mode: an open hand rotates, a pinch selects what is under the reticle, and two hands moving apart or together zoom. If the camera is denied or missing, the header says so and mouse and keyboard keep working.
+Gesture mode: the camera shows mirrored and dimmed behind the 3D view, so you can watch your hand touch the brain. An open hand rotates, a pinch selects what is under the reticle, and two hands moving apart or together zoom. If the camera is denied or missing, the header says so and mouse and keyboard keep working.
 Open your hand before pinching: a pinch only selects after the hand has been seen open, so a tracking dropout mid-pinch cannot select twice.
 
 ## Layout of `src/`

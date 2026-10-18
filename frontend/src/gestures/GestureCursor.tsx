@@ -1,7 +1,8 @@
 import { useEffect, useRef } from 'react'
 import { gestureBus } from './bus'
+import { viewNdc } from './cover'
 
-/** Reticle at the hand pointer. Moved by bus events straight on the DOM node, never through React state. */
+/** Reticle at the hand pointer, over the webcam backdrop's crop. Moved by bus events straight on the DOM node, never through React state. */
 export function GestureCursor() {
   const ref = useRef<HTMLDivElement>(null)
 
@@ -15,9 +16,11 @@ export function GestureCursor() {
         return
       }
       if (e.type !== 'hover' && e.type !== 'select') return
+      const view = el.parentElement
+      const [x, y] = viewNdc(e.ndc, view?.clientWidth ?? 0, view?.clientHeight ?? 0)
       el.style.opacity = '1'
-      el.style.left = `${((e.ndc[0] + 1) / 2) * 100}%`
-      el.style.top = `${((1 - e.ndc[1]) / 2) * 100}%`
+      el.style.left = `${((x + 1) / 2) * 100}%`
+      el.style.top = `${((1 - y) / 2) * 100}%`
       if (e.type === 'select') {
         el.classList.add('pinch')
         window.clearTimeout(pulse)
