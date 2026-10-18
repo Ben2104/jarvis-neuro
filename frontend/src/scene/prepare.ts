@@ -1,6 +1,7 @@
 import { Group, type Material, Mesh, type MeshStandardMaterial, type Vector3 } from 'three'
 import { SCENE_SCALE } from '../lib/affine'
 import type { LoadedCase } from '../lib/loadCase'
+import { addSulcalColors } from './curvature'
 import { createAssetMaterial } from './materials'
 
 export type Side = 'left' | 'right'
@@ -57,6 +58,7 @@ export function prepareCase(c: LoadedCase): PreparedCase {
     for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) replaced.add(m)
     const mat = createAssetMaterial(asset)
     if (asset.kind === 'surface') {
+      addSulcalColors(mesh.geometry)
       // Two meshes share the geometry, each clipped to its side of the midline so the halves can move apart.
       // Each needs its own material: clipping planes are per material and follow the half's offset.
       addPart(asset.id, mesh, mat, 'left')

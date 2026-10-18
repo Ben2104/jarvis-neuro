@@ -136,3 +136,29 @@ def test_survey_uses_brain_midline_for_left_tumor(tmp_path, capsys, left_padding
     assert name == SYNTH_NAME
     assert float(volume) > 0
     assert side == "left"
+
+
+def test_missing_t1_bakes_the_envelope_surface(tmp_path):
+    from dataclasses import replace
+
+    from jarvis_neuro.bake import BRAIN_TARGET_FACES, brain_mask
+    from jarvis_neuro.geometry import mesh_from_mask
+    from jarvis_neuro.meshing import smooth_and_decimate
+
+    case = load_msd_case(make_synthetic_msd(tmp_path / "msd"), SYNTH_NAME)
+    case = replace(case, modalities={name: index for name, index in case.modalities.items() if name != "t1w"})
+    out = tmp_path / "out"
+    bake_case(case, case.labels, "synthetic", out)
+    scene = trimesh.load(out / "case.glb", force="scene")
+    mesh = scene.geometry[scene.graph["brain_surface"][1]]
+    vertices, faces = smooth_and_decimate(
+        *mesh_from_mask(brain_mask(case, case.labels), case.vox2ras, sigma=1.0), BRAIN_TARGET_FACES
+    )
+    np.testing.assert_array_equal(mesh.vertices, vertices)
+    np.testing.assert_array_equal(mesh.faces, faces)
+
+
+def test_synth_001_bakes_with_brain_surface(baked):
+    directory, _, _ = baked
+    scene = trimesh.load(directory / "case.glb", force="scene")
+    assert "brain_surface" in scene.graph.nodes_geometry
