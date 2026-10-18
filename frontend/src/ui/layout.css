@@ -480,3 +480,26 @@ kbd {
   border-radius: 5px;
   background: var(--panel2);
 }
+
+.gesture-cursor {
+  position: absolute;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  margin: -16px 0 0 -16px;
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+  opacity: 0;
+  pointer-events: none;
+  transition: transform 0.12s ease-out;
+}
+.gesture-cursor::after {
+  content: '';
+  position: absolute;
+  inset: 11px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.gesture-cursor.pinch {
+  transform: scale(0.6);
+}

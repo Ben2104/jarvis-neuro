@@ -1,3 +1,5 @@
+import { GestureCursor } from './gestures/GestureCursor'
+import { useHandTracking } from './gestures/useHandTracking'
 import { useShortcuts } from './tools/useShortcuts'
 import { AgentConsole } from './ui/AgentConsole'
 import { ErrorBanner } from './ui/ErrorBanner'
@@ -12,6 +14,7 @@ import './ui/layout.css'
 
 export function App() {
   useShortcuts()
+  useHandTracking()
   return (
     <div className="app">
       <Header />
@@ -22,7 +25,9 @@ export function App() {
           <ShortcutLegend />
         </div>
         <div className="center-col">
-          <ViewportPanel />
+          <ViewportPanel>
+            <GestureCursor />
+          </ViewportPanel>
           <SceneControls />
         </div>
         <div className="right-col">
