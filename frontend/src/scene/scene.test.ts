@@ -1,21 +1,23 @@
-import { FrontSide, type Mesh, MeshStandardMaterial, Raycaster, ShaderLib, Vector3 } from 'three'
+import { Box3, FrontSide, type Mesh, MeshStandardMaterial, Raycaster, ShaderLib, Vector3 } from 'three'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { rasToScene, sceneToRas } from '../lib/affine'
 import type { LoadedCase } from '../lib/loadCase'
-import type { Vec3 } from '../lib/manifest'
+import { explodeOffsets } from '../lib/explode'
+import { type Vec3, tumorAssets } from '../lib/manifest'
 import { initialViewFor } from '../state/store'
 import { loadSynth } from '../test/fixtures'
 import { cutawayPlane, hemispherePlane } from './clipping'
 import { assetBox } from './focus'
 import { HOVER_EMISSIVE, SELECTED_EMISSIVE, addFresnelRim } from './materials'
-import { pickTumor } from './picking'
+import { isClippedAway, pickTumor } from './picking'
 import { type PreparedCase, prepareCase, releaseCase } from './prepare'
-import { type SceneView, applyViewState } from './viewState'
+import { type SceneView, applyViewState, sceneOffset } from './viewState'
 
 let c: LoadedCase
 let p: PreparedCase
 
 const v3 = (a: Vec3) => new Vector3(...a)
+const sceneOffsetVec = (ras: Vec3) => sceneOffset(c, ras)
 const defaults = (): SceneView => ({ ...initialViewFor(c) })
 
 beforeAll(async () => {
@@ -113,7 +115,11 @@ describe('applyViewState', () => {
     expect(p.materials.get('tumor_ed')!.transparent).toBe(true)
     expect(p.materials.get('tumor_ed')!.depthWrite).toBe(false)
     expect(p.materials.get('tumor_et')!.transparent).toBe(false)
-    expect([...p.materials.values()].every((m) => m.clippingPlanes === null)).toBe(true)
+    // The brain halves are always clipped to their own side of the midline; nothing else is clipped by default.
+    for (const part of p.parts) {
+      if (part.hemisphere) expect(part.material.clippingPlanes).toHaveLength(1)
+      else expect(part.material.clippingPlanes).toBeNull()
+    }
   })
 
   it('clips every asset for a cutaway and only the brain for a hemisphere', () => {
@@ -137,6 +143,142 @@ describe('applyViewState', () => {
     expect(p.materials.get('tumor_ncr')!.emissiveIntensity).toBe(SELECTED_EMISSIVE)
     expect(p.meshes.get('tumor_ed')!.visible).toBe(false)
     expect(p.meshes.get('brain_surface')!.visible).toBe(false)
+    applyViewState(p, c, defaults())
+  })
+})
+
+describe('two-mesh brain', () => {
+  const half = (side: 'left' | 'right') => p.parts.find((x) => x.assetId === 'brain_surface' && x.hemisphere === side)!
+  const probe = (x: number): Vector3 => v3(rasToScene(c.frame, [x, 0, 0]))
+
+  it('builds one mesh per hemisphere on shared geometry with separate materials', () => {
+    const [l, r] = [half('left'), half('right')]
+    expect(l.mesh).not.toBe(r.mesh)
+    expect(l.mesh.geometry).toBe(r.mesh.geometry)
+    expect(l.material).not.toBe(r.material)
+    expect(l.material.customProgramCacheKey()).toBe('fresnel-rim')
+    expect(r.mesh.userData.assetId).toBe('brain_surface')
+    expect(r.mesh.parent).toBe(l.mesh.parent)
+    expect(p.parts.filter((x) => x.assetId === 'brain_surface')).toHaveLength(2)
+  })
+
+  it('clips each half to its own side of the midline', () => {
+    applyViewState(p, c, defaults())
+    const [lp] = half('left').material.clippingPlanes!
+    const [rp] = half('right').material.clippingPlanes!
+    expect(lp.distanceToPoint(probe(-10))).toBeGreaterThan(0)
+    expect(lp.distanceToPoint(probe(10))).toBeLessThan(0)
+    expect(rp.distanceToPoint(probe(10))).toBeGreaterThan(0)
+    expect(rp.distanceToPoint(probe(-10))).toBeLessThan(0)
+  })
+
+  it('hides the matching mesh for hide-hemisphere instead of clipping it', () => {
+    applyViewState(p, c, { ...defaults(), hemisphere: 'left' })
+    expect(half('left').mesh.visible).toBe(false)
+    expect(half('right').mesh.visible).toBe(true)
+    expect(half('right').material.clippingPlanes).toHaveLength(1)
+    applyViewState(p, c, { ...defaults(), hemisphere: 'right' })
+    expect(half('left').mesh.visible).toBe(true)
+    expect(half('right').mesh.visible).toBe(false)
+    applyViewState(p, c, defaults())
+  })
+
+  it('applies brain_surface opacity and visibility to both halves', () => {
+    applyViewState(p, c, { ...defaults(), opacity: { ...defaults().opacity, brain_surface: 0.2 } })
+    expect(half('left').material.opacity).toBe(0.2)
+    expect(half('right').material.opacity).toBe(0.2)
+    applyViewState(p, c, { ...defaults(), visible: { ...defaults().visible, brain_surface: false } })
+    expect(p.parts.filter((x) => x.assetId === 'brain_surface').every((x) => !x.mesh.visible)).toBe(true)
+    applyViewState(p, c, defaults())
+  })
+})
+
+describe('explode', () => {
+  const exploded = (explode: number, over: Partial<SceneView> = {}): SceneView => ({ ...defaults(), explode, ...over })
+  const offsetsAt = (t: number) => explodeOffsets(c.manifest, c.brainBoxRas, t)
+  const meshOf = (id: string, side?: 'left' | 'right') =>
+    p.parts.find((x) => x.assetId === id && (side === undefined || x.hemisphere === side))!
+
+  it('leaves everything where it was loaded at 0', () => {
+    applyViewState(p, c, exploded(0))
+    for (const part of p.parts) expect(part.mesh.position.toArray()).toEqual(part.basePosition.toArray())
+  })
+
+  it('slides the hemispheres apart along RAS x and returns them when reassembled', () => {
+    const before = assetBox(p, 'brain_surface')!.getSize(new Vector3())
+    applyViewState(p, c, exploded(1))
+    const o = offsetsAt(1)
+    const world = (side: 'left' | 'right') => new Box3().setFromObject(meshOf('brain_surface', side).mesh).getCenter(new Vector3())
+    applyViewState(p, c, exploded(0))
+    const home = { left: world('left'), right: world('right') }
+    applyViewState(p, c, exploded(1))
+    for (const side of ['left', 'right'] as const) {
+      const moved = world(side).sub(home[side])
+      expect(moved.distanceTo(sceneOffsetVec(o[side]))).toBeLessThan(1e-9)
+    }
+    // ras2gl negates x, so the left half (-x RAS) goes to +x in GL; either way the box widens by both shifts.
+    const after = assetBox(p, 'brain_surface')!.getSize(new Vector3())
+    expect(after.length()).toBeGreaterThan(before.length())
+    applyViewState(p, c, exploded(0))
+    expect(world('left').distanceTo(home.left)).toBeLessThan(1e-12)
+  })
+
+  it('moves a tumour by its offset and fits the camera to the shifted box', () => {
+    const home = assetBox(p, 'tumor_ncr')!.getCenter(new Vector3())
+    applyViewState(p, c, exploded(1))
+    const o = offsetsAt(1).assets.tumor_ncr
+    expect(Math.hypot(...o)).toBeGreaterThan(0)
+    const moved = assetBox(p, 'tumor_ncr')!.getCenter(new Vector3()).sub(home)
+    expect(moved.distanceTo(sceneOffsetVec(o))).toBeLessThan(1e-9)
+    applyViewState(p, c, exploded(0))
+  })
+
+  it('translates cutaway and hemisphere planes with each moved mesh', () => {
+    const cutaway = { plane: 'coronal' as const, rasMm: 10 }
+    applyViewState(p, c, exploded(0, { cutaway }))
+    const rest = p.parts.map((x) => x.material.clippingPlanes!.map((pl) => pl.clone()))
+    applyViewState(p, c, exploded(1, { cutaway }))
+    p.parts.forEach((part, i) => {
+      const shift = part.mesh.position.clone().sub(part.basePosition).multiplyScalar(0.001)
+      const planes = part.material.clippingPlanes!
+      expect(planes).toHaveLength(rest[i].length)
+      planes.forEach((plane, k) => {
+        // A point moved with the part sees the same signed distance as the unmoved point saw before.
+        const probePoint = v3(rasToScene(c.frame, [-5, 12, 0]))
+        expect(plane.distanceToPoint(probePoint.clone().add(shift))).toBeCloseTo(rest[i][k].distanceToPoint(probePoint), 9)
+      })
+    })
+    applyViewState(p, c, defaults())
+  })
+
+  it('picks a moved tumour, and its hit maps back to the unmoved geometry', () => {
+    applyViewState(p, c, exploded(1))
+    const o = offsetsAt(1).assets.tumor_ncr
+    const ncr = tumorAssets(c.manifest).find((t) => t.id === 'tumor_ncr')!
+    const target: Vec3 = [ncr.centroid_ras[0] + o[0], ncr.centroid_ras[1] + o[1], ncr.centroid_ras[2] + o[2]]
+    const from = v3(rasToScene(c.frame, [target[0], target[1] + 200, target[2]]))
+    const ray = new Raycaster(from, v3(rasToScene(c.frame, target)).sub(from).normalize())
+    const hit = pickTumor(ray, p)!
+    expect(hit.assetId).toBe('tumor_ncr')
+    const ras = sceneToRas(c.frame, hit.point.toArray() as Vec3)
+    const back = [ras[0] - o[0], ras[1] - o[1], ras[2] - o[2]]
+    for (let a = 0; a < 3; a++) {
+      expect(back[a]).toBeGreaterThanOrEqual(ncr.bbox_ras[0][a] - 1.5)
+      expect(back[a]).toBeLessThanOrEqual(ncr.bbox_ras[1][a] + 1.5)
+    }
+    applyViewState(p, c, exploded(0))
+  })
+
+  it('keeps isClippedAway working on a moved mesh: the cut travels with the part', () => {
+    const o = offsetsAt(1).assets.tumor_ncr
+    const ncr = tumorAssets(c.manifest).find((t) => t.id === 'tumor_ncr')!
+    const cutaway = { plane: 'coronal' as const, rasMm: ncr.centroid_ras[1] }
+    applyViewState(p, c, exploded(1, { cutaway }))
+    const centre: Vec3 = [ncr.centroid_ras[0] + o[0], ncr.centroid_ras[1] + o[1], ncr.centroid_ras[2] + o[2]]
+    const mesh = meshOf('tumor_ncr').mesh
+    // Own-frame centroid is on the plane: just in front kept, just behind (further +y) clipped.
+    expect(isClippedAway(mesh, v3(rasToScene(c.frame, [centre[0], centre[1] - 3, centre[2]])))).toBe(false)
+    expect(isClippedAway(mesh, v3(rasToScene(c.frame, [centre[0], centre[1] + 3, centre[2]])))).toBe(true)
     applyViewState(p, c, defaults())
   })
 })

@@ -14,12 +14,13 @@ export function CaseModel({ loaded }: { loaded: LoadedCase }) {
   const visible = useViewer((s) => s.visible)
   const cutaway = useViewer((s) => s.cutaway)
   const hemisphere = useViewer((s) => s.hemisphere)
+  const explode = useViewer((s) => s.explode)
   const hovered = useViewer((s) => s.hovered)
   const selected = useViewer((s) => s.selected)
 
   useLayoutEffect(() => {
-    applyViewState(prepared, loaded, { opacity, visible, cutaway, hemisphere, hovered, selected })
-  }, [prepared, loaded, opacity, visible, cutaway, hemisphere, hovered, selected])
+    applyViewState(prepared, loaded, { opacity, visible, cutaway, hemisphere, explode, hovered, selected })
+  }, [prepared, loaded, opacity, visible, cutaway, hemisphere, explode, hovered, selected])
 
   // brain_surface has raycast disabled, so these only ever see tumour meshes. A hit on the
   // clipped-away side is ignored without stopPropagation, so r3f offers the event to the next hit.
