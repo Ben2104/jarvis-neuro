@@ -1,5 +1,7 @@
 from agent_fakes import ScriptedModel, tool_results
 from fastapi.testclient import TestClient
+import pytest
+from starlette.websockets import WebSocketDisconnect
 
 from jarvis_neuro.agent.app import create_app
 from jarvis_neuro.agent.cases import DEFAULT_CASES_DIR, CaseRepo
@@ -278,7 +280,6 @@ def test_disconnect_awaits_turn_and_preserves_cancellation(monkeypatch):
     asyncio.run(main())
 
 
-
 def test_allowlist_normalises_env_origin(monkeypatch):
     monkeypatch.setenv('AGENT_ALLOWED_ORIGINS', ' HTTP://LocalHost:5173/ , , / ')
     with _client(ScriptedModel([])).websocket_connect('/ws', headers={'origin': 'http://localhost:5173'}) as ws:
@@ -317,3 +318,27 @@ def test_unknown_field_does_not_echo_input():
         assert ws.receive_json() == {
             'type': 'error', 'turn_id': None, 'message': 'bad message: message: Extra inputs are not permitted',
         }
+
+
+def test_null_origin_is_rejected(monkeypatch):
+    monkeypatch.delenv('AGENT_ALLOWED_ORIGINS', raising=False)
+    with pytest.raises(WebSocketDisconnect) as exc:
+        with _client(ScriptedModel([])).websocket_connect('/ws', headers={'origin': 'null'}):
+            pass
+    assert exc.value.code == 1008
+
+
+@pytest.mark.parametrize('frame,reason', [
+    ('{}', 'type: message type is required'),
+    ('[]', 'message: Input should be an object'),
+    ('null', 'message: Input should be an object'),
+])
+def test_bad_message_reason_for_non_message_json_keeps_socket_open(frame, reason):
+    with _client(ScriptedModel([[('text', 'alive')]])).websocket_connect('/ws') as ws:
+        ws.receive_json()
+        ws.send_text(frame)
+        error = ws.receive_json()
+        assert error == {'type': 'error', 'turn_id': None, 'message': f'bad message: {reason}'}
+        assert '\n' not in error['message'] and '\r' not in error['message']
+        ws.send_json({'type': 'user', 'turn_id': 'next', 'text': 'hello'})
+        assert _until(ws, 'reply')['text'] == 'alive'

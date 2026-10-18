@@ -1,6 +1,6 @@
 import pytest
 
-from jarvis_neuro.agent.config import AgentSettings, ConfigError, build_model, load_settings
+from jarvis_neuro.agent.config import AgentSettings, ConfigError, allowed_origins, build_model, load_settings
 
 
 def test_anthropic_defaults_follow_spec_section_5():
@@ -42,9 +42,6 @@ def test_settings_repr_hides_api_key():
     assert 'anthropic' in repr(settings)
 
 
-
 def test_allowed_origins_drops_normalised_empty_entries(monkeypatch):
-    from jarvis_neuro.agent.config import allowed_origins
-
     monkeypatch.setenv('AGENT_ALLOWED_ORIGINS', ' HTTP://LocalHost:5173/ , , /// , ')
     assert allowed_origins() == {'http://localhost:5173'}
