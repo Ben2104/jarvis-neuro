@@ -1,6 +1,36 @@
 {
   "cases": [
     {
+      "case_id": "brats_001",
+      "provenance": "ground-truth",
+      "path": "brats_001/ground-truth/manifest.json"
+    },
+    {
+      "case_id": "brats_001",
+      "provenance": "monai-segresnet",
+      "path": "brats_001/monai-segresnet/manifest.json"
+    },
+    {
+      "case_id": "brats_003",
+      "provenance": "ground-truth",
+      "path": "brats_003/ground-truth/manifest.json"
+    },
+    {
+      "case_id": "brats_003",
+      "provenance": "monai-segresnet",
+      "path": "brats_003/monai-segresnet/manifest.json"
+    },
+    {
+      "case_id": "brats_010",
+      "provenance": "ground-truth",
+      "path": "brats_010/ground-truth/manifest.json"
+    },
+    {
+      "case_id": "brats_010",
+      "provenance": "monai-segresnet",
+      "path": "brats_010/monai-segresnet/manifest.json"
+    },
+    {
       "case_id": "synth_001",
       "provenance": "synthetic",
       "path": "synth_001/synthetic/manifest.json"

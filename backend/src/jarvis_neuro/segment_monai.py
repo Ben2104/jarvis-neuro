@@ -9,8 +9,12 @@ import numpy as np
 from .labels import exclusive_from_channels
 
 BUNDLE = "brats_mri_segmentation"
-INPUT_ORDER: tuple[str, ...] = ()                    # set from metadata.json in step 5; empty refuses to run
-OUTPUT_ORDER: tuple[str, ...] = ()                   # set from metadata.json in step 5; empty refuses to run
+# configs/metadata.json network_data_format.inputs.image.channel_def:
+# "0": "T1c", "1": "T1", "2": "T2", "3": "FLAIR"
+INPUT_ORDER: tuple[str, ...] = ("t1gd", "t1w", "t2w", "flair")
+# configs/metadata.json network_data_format.outputs.pred.channel_def:
+# "0": "Tumor core", "1": "Whole tumor", "2": "Enhancing tumor"
+OUTPUT_ORDER: tuple[str, ...] = ("tc", "wt", "et")
 
 
 def channels_to_labels(prob: np.ndarray, output_order: tuple[str, ...] = OUTPUT_ORDER,
@@ -18,7 +22,8 @@ def channels_to_labels(prob: np.ndarray, output_order: tuple[str, ...] = OUTPUT_
     missing = sorted({"tc", "wt", "et"} - set(output_order))
     if not output_order or missing:
         raise ValueError(f"MONAI_OUTPUT_ORDER: set OUTPUT_ORDER from the bundle metadata (missing {missing})")
-    ch = {name: prob[i] > threshold for i, name in enumerate(output_order)}
+    # inference.json uses AsDiscreted(threshold=0.5), which includes the boundary.
+    ch = {name: prob[i] >= threshold for i, name in enumerate(output_order)}
     return exclusive_from_channels(ch["tc"], ch["wt"], ch["et"])
 
 
