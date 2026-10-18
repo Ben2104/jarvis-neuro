@@ -70,7 +70,8 @@ describe('ManifestSchema', () => {
 
   it('accepts the committed case index', () => {
     const index = CaseIndexSchema.parse(readJson(join(PUBLIC_DIR, 'cases/index.json')))
-    expect(index.cases[0]).toEqual({
+    expect(index.cases.length).toBeGreaterThan(0)
+    expect(index.cases).toContainEqual({
       case_id: 'synth_001',
       provenance: 'synthetic',
       path: 'synth_001/synthetic/manifest.json',

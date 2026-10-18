@@ -43,9 +43,9 @@ describe('before a case is loaded', () => {
   })
 
   it('rejects an unknown case id', async () => {
-    expect(err(await call('load_case', { case_id: 'nope_999' }))).toMatch(
-      /case_id: unknown case_id "nope_999"; expected one of synth_001/,
-    )
+    const message = err(await call('load_case', { case_id: 'nope_999' }))
+    expect(message).toMatch(/case_id: unknown case_id "nope_999"; expected one of /)
+    expect(message).toContain('synth_001')
     expect(store.getState().current).toBeNull()
   })
 

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { fsFetch, readSynthManifestJson, synthEntry } from '../test/fixtures'
 import { rasExtent } from './affine'
 import { CaseLoadError, fetchCase, fetchIndex } from './loadCase'
-import { tumorAssets } from './manifest'
+import { type CaseIndexEntry, tumorAssets } from './manifest'
 
 const SYNTH_BRAIN_BOX = { min: [-71, -83, -59], max: [71, 83, 59] }
 
@@ -22,7 +22,8 @@ async function loadError(overrides: Record<string, () => Response>, entry = synt
 describe('fetchIndex', () => {
   it('reads and validates index.json', async () => {
     const index = await fetchIndex({ fetchFn: fsFetch() })
-    expect(index.cases).toEqual([synthEntry])
+    expect(index.cases).toContainEqual(synthEntry)
+    expect(new Set(index.cases.map((c) => `${c.case_id}/${c.provenance}`)).size).toBe(index.cases.length)
   })
 
   it('rejects an invalid index', async () => {
@@ -31,6 +32,33 @@ describe('fetchIndex', () => {
     )
     expect(err).toBeInstanceOf(CaseLoadError)
     expect((err as Error).message).toMatch(/index.json invalid/)
+  })
+})
+
+describe('committed real cases', () => {
+  const realEntries = ['brats_001', 'brats_003', 'brats_010'].flatMap((id) =>
+    (['ground-truth', 'monai-segresnet'] as const).map((provenance): CaseIndexEntry => ({
+      case_id: id,
+      provenance,
+      path: `${id}/${provenance}/manifest.json`,
+    })),
+  )
+
+  it('lists every real case in the committed index', async () => {
+    const index = await fetchIndex({ fetchFn: fsFetch() })
+    for (const e of realEntries) expect(index.cases).toContainEqual(e)
+  })
+
+  // fetchCase runs the manifest schema, the RAS-canonical vox2ras check and the volume byte-length checks.
+  it.each(realEntries)('loads $case_id/$provenance through the loader', async (entry) => {
+    const c = await fetchCase(entry, { fetchFn: fsFetch() })
+    expect(c.manifest.case_id).toBe(entry.case_id)
+    expect(c.manifest.provenance).toBe(entry.provenance)
+    expect(c.flair.dims).toEqual(c.manifest.dims)
+    expect(c.mask.dims).toEqual(c.manifest.dims)
+    for (const id of ['brain_surface', 'tumor_et', 'tumor_ncr', 'tumor_ed']) {
+      expect((c.scene.getObjectByName(id) as Mesh).isMesh).toBe(true)
+    }
   })
 })
 
