@@ -11,11 +11,12 @@ from typing import Any
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
+from pydantic import ValidationError
 from strands.models.model import Model
 
 from .bridge import BrowserBridge
 from .cases import REPO_ROOT, CaseRepo
-from .config import AgentSettings, ConfigError, allowed_origins, build_model, load_settings
+from .config import AgentSettings, ConfigError, allowed_origins, build_model, load_settings, normalise_origin
 from .orchestrator import OrchestratorSession
 from .protocol import CLIENT_MESSAGE, CaseMessage, ToolResultMessage, UserMessage
 from .reasoner import make_explainer
@@ -24,6 +25,27 @@ from .tools import SceneContext
 log = logging.getLogger(__name__)
 DEFAULT_STATIC_DIR = REPO_ROOT / "frontend" / "dist"
 ModelBuilder = Callable[[AgentSettings, str], Model]
+
+
+def bad_message_reason(error: ValueError | KeyError) -> str:
+    """One safe line: omit input values, arbitrary extra-field names and tag values."""
+    if isinstance(error, KeyError):
+        return "expected a text frame"
+    if not isinstance(error, ValidationError):
+        return "not valid JSON"
+    first = error.errors(include_input=False, include_context=False, include_url=False)[0]
+    if first["type"] == "json_invalid":
+        return "not valid JSON"
+    if first["type"] == "union_tag_invalid":
+        return "type: unknown message type"
+    if first["type"] == "union_tag_not_found":
+        return "type: message type is required"
+    fields = {"type", "turn_id", "text", "id", "ok", "result", "error", "case_id", "provenance"}
+    loc = first["loc"]
+    if loc and loc[0] in {"user", "tool_result", "case"}:
+        loc = loc[1:]
+    location = ".".join(str(part) for part in loc if part in fields) or "message"
+    return f"{location}: {' '.join(first['msg'].split())}"
 
 
 def create_app(
@@ -51,7 +73,7 @@ def create_app(
     @app.websocket("/ws")
     async def agent_socket(socket: WebSocket) -> None:
         origin = socket.headers.get("origin")
-        if origin is not None and origin not in allowed_origins():
+        if origin is not None and normalise_origin(origin) not in allowed_origins():
             await socket.close(code=1008)
             return
         await socket.accept()
@@ -88,8 +110,6 @@ def create_app(
                 await send({"type": "busy", "busy": True})
                 text = await session.ask(msg.text)
                 await send({"type": "reply", "turn_id": msg.turn_id, "text": text})
-            except asyncio.CancelledError:
-                raise
             except Exception as e:  # provider down, quota, bad key: tell the user, keep the socket
                 log.exception("agent turn failed")
                 await send({"type": "error", "turn_id": msg.turn_id, "message": f"agent failed: {e}"})
@@ -104,7 +124,7 @@ def create_app(
                     raw = await socket.receive_text()
                     msg = CLIENT_MESSAGE.validate_json(raw)
                 except (ValueError, KeyError) as e:
-                    detail = "binary frames are not supported; send JSON text" if isinstance(e, KeyError) else str(e)
+                    detail = bad_message_reason(e)
                     await send({"type": "error", "turn_id": None, "message": f"bad message: {detail}"})
                     continue
                 if isinstance(msg, ToolResultMessage):

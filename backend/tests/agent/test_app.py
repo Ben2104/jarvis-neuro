@@ -139,9 +139,9 @@ def test_non_json_text_keeps_socket_open():
     with _client(ScriptedModel([[('text', 'alive')]])).websocket_connect('/ws') as ws:
         ws.receive_json()
         ws.send_text('not json')
-        error = ws.receive_json()
-        assert error['type'] == 'error' and error['turn_id'] is None
-        assert error['message'].startswith('bad message: ')
+        assert ws.receive_json() == {
+            'type': 'error', 'turn_id': None, 'message': 'bad message: not valid JSON',
+        }
         ws.send_json({'type': 'user', 'turn_id': 'next', 'text': 'hello'})
         assert _until(ws, 'reply')['text'] == 'alive'
 
@@ -150,9 +150,9 @@ def test_binary_frame_keeps_socket_open():
     with _client(ScriptedModel([[('text', 'alive')]])).websocket_connect('/ws') as ws:
         ws.receive_json()
         ws.send_bytes(b'{}')
-        error = ws.receive_json()
-        assert error['type'] == 'error' and error['turn_id'] is None
-        assert error['message'].startswith('bad message: ')
+        assert ws.receive_json() == {
+            'type': 'error', 'turn_id': None, 'message': 'bad message: expected a text frame',
+        }
         ws.send_json({'type': 'user', 'turn_id': 'next', 'text': 'hello'})
         assert _until(ws, 'reply')['text'] == 'alive'
 
@@ -276,3 +276,44 @@ def test_disconnect_awaits_turn_and_preserves_cancellation(monkeypatch):
         assert len(turn_tasks) == 1 and turn_tasks[0].cancelled()
 
     asyncio.run(main())
+
+
+
+def test_allowlist_normalises_env_origin(monkeypatch):
+    monkeypatch.setenv('AGENT_ALLOWED_ORIGINS', ' HTTP://LocalHost:5173/ , , / ')
+    with _client(ScriptedModel([])).websocket_connect('/ws', headers={'origin': 'http://localhost:5173'}) as ws:
+        assert ws.receive_json()['state'] == 'ready'
+
+
+def test_allowlist_normalises_incoming_origin(monkeypatch):
+    monkeypatch.setenv('AGENT_ALLOWED_ORIGINS', 'http://localhost:5173')
+    with _client(ScriptedModel([])).websocket_connect('/ws', headers={'origin': ' HTTP://LocalHost:5173/ '}) as ws:
+        assert ws.receive_json()['state'] == 'ready'
+
+
+def test_bad_message_validation_is_short_and_does_not_echo_input():
+    with _client(ScriptedModel([])).websocket_connect('/ws') as ws:
+        ws.receive_json()
+        ws.send_json({'type': 'user', 'turn_id': 'a', 'text': 'PRIVATE-CONTENT\n' * 200})
+        assert ws.receive_json() == {
+            'type': 'error', 'turn_id': None,
+            'message': 'bad message: text: String should have at most 2000 characters',
+        }
+
+
+def test_unknown_message_type_does_not_echo_input():
+    with _client(ScriptedModel([])).websocket_connect('/ws') as ws:
+        ws.receive_json()
+        ws.send_json({'type': 'PRIVATE-CONTENT\ninjected'})
+        assert ws.receive_json() == {
+            'type': 'error', 'turn_id': None, 'message': 'bad message: type: unknown message type',
+        }
+
+
+def test_unknown_field_does_not_echo_input():
+    with _client(ScriptedModel([])).websocket_connect('/ws') as ws:
+        ws.receive_json()
+        ws.send_json({'type': 'user', 'turn_id': 'a', 'text': 'hello', 'PRIVATE-CONTENT\ninjected': 'secret'})
+        assert ws.receive_json() == {
+            'type': 'error', 'turn_id': None, 'message': 'bad message: message: Extra inputs are not permitted',
+        }

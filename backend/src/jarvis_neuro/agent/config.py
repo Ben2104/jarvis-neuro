@@ -15,10 +15,14 @@ DEFAULT_ALLOWED_ORIGINS = (
 )
 
 
+def normalise_origin(origin: str) -> str:
+    return origin.strip().rstrip("/").lower()
+
+
 def allowed_origins() -> set[str]:
     """Browser origins allowed to open the agent socket; non-browser clients may omit Origin."""
     value = os.environ.get("AGENT_ALLOWED_ORIGINS", DEFAULT_ALLOWED_ORIGINS)
-    return {origin.strip() for origin in value.split(",") if origin.strip()}
+    return {origin for entry in value.split(",") if (origin := normalise_origin(entry))}
 
 
 class ConfigError(ValueError):

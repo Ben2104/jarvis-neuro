@@ -40,3 +40,11 @@ def test_settings_repr_hides_api_key():
     settings = AgentSettings('anthropic', 'orch', 'reason', 'secret-api-key')
     assert 'secret-api-key' not in repr(settings)
     assert 'anthropic' in repr(settings)
+
+
+
+def test_allowed_origins_drops_normalised_empty_entries(monkeypatch):
+    from jarvis_neuro.agent.config import allowed_origins
+
+    monkeypatch.setenv('AGENT_ALLOWED_ORIGINS', ' HTTP://LocalHost:5173/ , , /// , ')
+    assert allowed_origins() == {'http://localhost:5173'}
