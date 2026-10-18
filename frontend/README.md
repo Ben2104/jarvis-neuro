@@ -39,8 +39,7 @@ Cases come from the bake pipeline (`../backend`, Plan A). The viewer reads `publ
 | `g` | webcam gesture mode on/off |
 | `v` | voice input: listen for one request (needs the agent online and a browser with speech recognition) |
 
-Gesture mode: the camera shows mirrored and dimmed behind the 3D view, so you can watch your hand touch the brain. An open hand rotates, a pinch selects what is under the reticle, and two hands moving apart or together zoom. Holding a pinch and moving it up pulls the hemispheres and tumour sub-regions apart (down closes them again). If the camera is denied or missing, the header says so and mouse and keyboard keep working.
-Open your hand before pinching: a pinch only selects after the hand has been seen open, so a tracking dropout mid-pinch cannot select twice.
+Gesture mode: the camera shows mirrored and dimmed behind the 3D view, and the 21 tracked landmarks of each hand are drawn over it. Point with your index finger to hover: the part under the reticle glows and its card shows, also while the parts are exploded. Pinch-tap (a quick pinch and release) to select it. Pinch with the reticle on the brain and move your hand to rotate. Open your hand to pull the parts apart (how far the hand is open sets how far they fly); make a fist to put them back. Two hands moving apart or together zoom. If the camera is denied or missing, the header says so and mouse and keyboard keep working.
 
 ## Layout of `src/`
 

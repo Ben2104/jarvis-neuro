@@ -40,7 +40,7 @@ export function ViewportPanel({ children }: { children?: ReactNode }) {
       )}
       {tumor && (
         <div className="overlay hover-card">
-          <div className="lbl">{hovered ? (gesturesOn ? 'Hover · pinch = select' : 'Hover') : 'Selected'}</div>
+          <div className="lbl">{hovered ? (gesturesOn ? 'Hover · pinch-tap = select' : 'Hover') : 'Selected'}</div>
           <div className="mono">{tumor.id}</div>
           <div className="k">{TUMOR_LABEL[tumor.id]}</div>
         </div>
