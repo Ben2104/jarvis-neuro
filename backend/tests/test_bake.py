@@ -1,5 +1,6 @@
 import json
 
+import nibabel as nib
 import numpy as np
 import pytest
 import trimesh
@@ -114,3 +115,24 @@ def test_cli_synthetic_writes_index(tmp_path):
     idx = json.loads((tmp_path / "index.json").read_text())
     assert idx["cases"] == [{"case_id": "synth_001", "provenance": "synthetic",
                              "path": "synth_001/synthetic/manifest.json"}]
+
+
+@pytest.mark.parametrize("left_padding", [0, 56])
+def test_survey_uses_brain_midline_for_left_tumor(tmp_path, capsys, left_padding):
+    root = make_synthetic_msd(tmp_path / "msd")
+    # LAS +i points left: append empty voxels to shift the volume centre far left
+    # without moving the brain or tumor in RAS. Volume-centre logic mislabels it.
+    if left_padding:
+        for directory in ("imagesTr", "labelsTr"):
+            path = root / directory / f"{SYNTH_NAME}.nii.gz"
+            img = nib.load(path)
+            data = np.asarray(img.dataobj)
+            pad = [(0, left_padding)] + [(0, 0)] * (data.ndim - 1)
+            nib.save(nib.Nifti1Image(np.pad(data, pad), img.affine), path)
+    main(["survey", "--root", str(root)])
+    header, row = capsys.readouterr().out.strip().splitlines()
+    assert header == "case\twt_ml\tside"
+    name, volume, side = row.split("\t")
+    assert name == SYNTH_NAME
+    assert float(volume) > 0
+    assert side == "left"

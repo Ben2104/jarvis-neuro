@@ -3,14 +3,13 @@ import argparse
 import tempfile
 from pathlib import Path
 
-import nibabel as nib
 import numpy as np
 from scipy.ndimage import binary_fill_holes
 
 from .geometry import RAS2GL, mesh_from_mask
 from .glb import draco_compress, write_glb
-from .io_msd import LoadedCase, load_msd_case, read_dataset_json
-from .labels import ASSET_BY_LABEL, COLOR_BY_LABEL, TUMOR_LABELS, remap
+from .io_msd import LoadedCase, load_msd_case
+from .labels import ASSET_BY_LABEL, COLOR_BY_LABEL, TUMOR_LABELS
 from .manifest import Manifest, Metrics, SurfaceAsset, TumorAsset, Volumes, update_index
 from .meshing import smooth_and_decimate
 from .stats import bbox_ras, centroid_ras, dice_score, midline_x_ras, min_dist_surface_mm, volume_ml
@@ -93,19 +92,19 @@ def _bake_one(root: Path, name: str, provenance: str, out: Path, draco: bool, se
 
 
 def _survey(root: Path) -> None:
-    """One line per case to help pick demo cases: whole-tumor mL and side relative to the volume centre."""
-    _, label_map = read_dataset_json(root)
+    """One line per case: whole-tumor mL and side relative to the brain-bbox midline."""
     print("case\twt_ml\tside")
     for p in sorted((root / "labelsTr").glob("*.nii.gz")):
         if p.name.startswith("._"):
             continue
-        img = nib.as_closest_canonical(nib.load(p))
-        wt = remap(np.rint(np.asarray(img.dataobj)), label_map) > 0
+        case = load_msd_case(root, p.name.removesuffix(".nii.gz"))
+        wt = case.labels > 0
         if not wt.any():
             continue
-        A = img.affine
+        A = case.vox2ras
         cx = centroid_ras(wt, A)[0]
-        mid = (A[0, 3] + A[0, 0] * (wt.shape[0] - 1) / 2)
+        brain = (case.image != 0).any(-1)
+        mid = midline_x_ras(brain, A)
         print(f"{p.name.removesuffix('.nii.gz')}\t{volume_ml(wt, A):.1f}\t{'left' if cx < mid else 'right'}")
 
 
