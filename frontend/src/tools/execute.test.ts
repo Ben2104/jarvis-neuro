@@ -26,6 +26,14 @@ beforeEach(async () => {
 })
 
 describe('before a case is loaded', () => {
+  it('rejects an unavailable provenance without setting the store error', async () => {
+    const r = await call('load_case', { case_id: 'synth_001', provenance: 'ground-truth' })
+    expect(err(r)).toContain('provenance: no case synth_001 with provenance ground-truth; available: synthetic')
+    expect(store.getState().error).toBeNull()
+    expect(store.getState().current).toBeNull()
+    expect(store.getState().loading).toBe(false)
+  })
+
   it('rejects case tools', async () => {
     expect(err(await call('set_opacity', { asset_id: 'tumor_et', value: 0.5 }))).toMatch(/no case loaded/)
   })

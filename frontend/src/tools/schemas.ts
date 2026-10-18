@@ -47,6 +47,17 @@ function oneOf(allowed: string[], what: string) {
 export function makeLoadCaseSchema(index: CaseIndex | null): z.ZodType<ToolArgs['load_case']> {
   const caseIds = [...new Set(index?.cases.map((c) => c.case_id) ?? [])]
   return z.strictObject({ case_id: oneOf(caseIds, 'case_id'), provenance: z.enum(PROVENANCES).optional() })
+    .superRefine(({ case_id, provenance }, ctx) => {
+      if (provenance === undefined || !caseIds.includes(case_id)) return
+      const available = index!.cases.filter((c) => c.case_id === case_id).map((c) => c.provenance)
+      if (!available.includes(provenance)) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['provenance'],
+          message: `no case ${case_id} with provenance ${provenance}; available: ${available.join(', ')}`,
+        })
+      }
+    })
 }
 
 export function makeCaseToolSchemas(c: LoadedCase): { [K in CaseToolName]: z.ZodType<ToolArgs[K]> } {
