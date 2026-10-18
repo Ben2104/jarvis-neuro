@@ -1,6 +1,6 @@
 # jarvis-neuro viewer
 
-Browser viewer for baked cases (`public/cases/<case_id>/<provenance>/`). It shows the patient's brain surface and tumour sub-regions in 3D, linked to a 2D MRI slice panel, and drives everything through one tool executor that the keyboard, webcam gestures and (later) the agent all call.
+Browser viewer for baked cases (`public/cases/<case_id>/<provenance>/`). It shows the patient's brain surface and tumour sub-regions in 3D, linked to a 2D MRI slice panel, and drives everything through one tool executor that the keyboard, webcam gestures and the agent all call.
 
 Educational visualization — not for diagnosis or surgical planning.
 
@@ -37,6 +37,7 @@ Cases come from the bake pipeline (`../backend`, Plan A). The viewer reads `publ
 | `b` / `t` | toggle brain surface / all tumour sub-regions |
 | `n` | next case in the index |
 | `g` | webcam gesture mode on/off |
+| `v` | voice input: listen for one request (needs the agent online and a browser with speech recognition) |
 
 Gesture mode: the camera shows mirrored and dimmed behind the 3D view, so you can watch your hand touch the brain. An open hand rotates, a pinch selects what is under the reticle, and two hands moving apart or together zoom. Holding a pinch and moving it up pulls the hemispheres and tumour sub-regions apart (down closes them again). If the camera is denied or missing, the header says so and mouse and keyboard keep working.
 Open your hand before pinching: a pinch only selects after the hand has been seen open, so a tracking dropout mid-pinch cannot select twice.
@@ -50,15 +51,21 @@ Open your hand before pinching: a pinch only selects after the hand has been see
 - `gestures/`: the event bus, the pure pinch reducer (`pinch.ts`) and the webcam hook.
 - `ui/`: panels and formatting. Every number shown comes from `manifest.json`. Missing values render as `—`.
 
-## Agent hook
+## Agent
 
-`executeTool(store, { id, name, args }, source)` in `src/tools/execute.ts` is the only way the scene changes on request. It validates `args` with zod, rejects unknown asset ids and keys, clamps numeric ranges, logs the call in the Agent console and returns `{ id, ok: true, result }` or `{ id, ok: false, error }`. The Plan C WebSocket client calls it. Dev builds expose it in the console:
+`src/agent/` connects to the agent server (`../backend`, `uv run uvicorn jarvis_neuro.agent.app:app --port 8000`) over one WebSocket. `npm run dev` proxies `/ws` and `/api` to port 8000; `VITE_AGENT_URL` overrides the socket URL. The socket reconnects with backoff (0.5 s doubling to 10 s). Mouse, keyboard and gestures never wait for it.
+
+The Agent console shows the link state (online, connecting, offline, unavailable with the server's reason on hover), the conversation, a text box, a mic button (`v`) and a "Speak replies" switch. Voice uses the Web Speech API: Chrome sends the audio to Google's servers for recognition; replies are read out with `speechSynthesis`. Where speech recognition is missing, the mic is disabled and the text box works.
+
+In the console, Send and Enter submission are disabled while a turn is running; the draft is kept. Voice (`v`) only starts while the agent is online, and listening stops if the link drops. Unchecking "Speak replies" stops speech in progress.
+
+The server sends scene tool calls to the browser. `executeTool(store, { id, name, args }, source)` in `src/tools/execute.ts` runs them, like every other input: it validates `args` with zod, rejects unknown asset ids and keys, clamps numeric ranges, logs the call in the Agent console and returns `{ id, ok: true, result }` or `{ id, ok: false, error }`, which goes back to the Orchestrator. Dev builds expose it in the console:
 
 ```js
 await __jarvis.executeTool(__jarvis.store, { id: 'x', name: 'focus_region', args: { asset_id: 'tumor_et' } })
 ```
 
-Tools: `load_case`, `set_opacity`, `focus_region`, `set_cutaway`, `hide_hemisphere`, `set_explode`, `toggle_visibility`, `inspect_mri_slice`.
+Browser tools: `load_case`, `set_opacity`, `focus_region`, `set_cutaway`, `hide_hemisphere`, `set_explode`, `toggle_visibility`, `inspect_mri_slice`. `explain` runs on the server only (the Clinical Reasoner).
 
 ## Known limits
 
