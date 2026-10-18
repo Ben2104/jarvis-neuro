@@ -50,11 +50,12 @@ def test_tumor_mesh_aligns_with_manifest_centroid(baked):
     """The alignment claim: GLB vertices and manifest numbers share one frame."""
     d, m, _ = baked
     scene = trimesh.load(d / "case.glb", force="scene")
-    ras2gl = np.array(m.ras2gl).reshape(4, 4)
     for a in tumors(m):
         geom = scene.geometry[scene.graph[a.node][1]]
-        expected = apply_affine(ras2gl, np.array([a.centroid_ras]))[0]
-        assert np.allclose(geom.vertices.mean(0), expected, atol=4.5), a.id   # 1.5 voxels of 3 mm
+        x, y, z = a.centroid_ras
+        assert abs(y - z) > 5.0, "fixture must expose a y/z axis swap"
+        expected = (-x, z, y)
+        assert np.allclose(geom.vertices.mean(0), expected, atol=0.5, rtol=0), a.id
 
 
 def test_tumor_centroids_inside_brain_and_left_of_midline(baked):

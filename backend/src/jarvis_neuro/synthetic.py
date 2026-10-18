@@ -25,7 +25,7 @@ def make_synthetic_msd(root: Path, seed: int = 0) -> Path:
     g = np.indices(SYNTH_SHAPE).astype(np.float32).transpose(1, 2, 3, 0)
     centre = np.array([28.0, 32.0, 24.0])
     brain = (((g - centre) / [24.0, 28.0, 20.0]) ** 2).sum(-1) <= 1.0
-    r = np.sqrt(((g - (centre + [8.0, 4.0, 3.0])) ** 2).sum(-1))
+    r = np.sqrt(((g - (centre + [8.0, 6.0, 1.0])) ** 2).sum(-1))
     labels = np.zeros(SYNTH_SHAPE, np.uint8)
     labels[(r <= 7.0) & brain] = 1      # edema
     labels[r <= 5.5] = 3                # enhancing ring
