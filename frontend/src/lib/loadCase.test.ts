@@ -65,6 +65,23 @@ describe('fetchCase', () => {
     )
   })
 
+  it.each([
+    [0, -3], [5, 0], [10, -3],
+    [1, 0.01], [2, -0.01], [4, 0.01], [6, -0.01], [8, 0.01], [9, -0.01],
+  ])('rejects noncanonical vox2ras entry %i = %s', async (at, value) => {
+    const m = readSynthManifestJson()
+    m.vox2ras[at] = value
+    expect(await loadError({ [`${BASE}manifest.json`]: json(m) })).toMatch(/RAS-canonical/)
+  })
+
+  it('accepts off-diagonal noise within the spacing-scaled tolerance', async () => {
+    const m = readSynthManifestJson()
+    m.vox2ras[1] = 3e-6
+    m.vox2ras[4] = -3e-6
+    const c = await fetchCase(synthEntry, { fetchFn: fsFetch({ [`${BASE}manifest.json`]: json(m) }) })
+    expect(c.manifest.vox2ras).toEqual(m.vox2ras)
+  })
+
   it('reports a truncated volume with the gzip hint', async () => {
     const msg = await loadError({ [`${BASE}mask_u8.bin`]: () => new Response(new Uint8Array(1000)) })
     expect(msg).toMatch(/mask_u8\.bin: volume has 1000 bytes, expected 172032/)

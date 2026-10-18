@@ -96,6 +96,14 @@ export async function fetchCase(entry: CaseIndexEntry, deps: CaseDeps = {}): Pro
     )
   }
 
+  const diagonal = [manifest.vox2ras[0], manifest.vox2ras[5], manifest.vox2ras[10]]
+  const tolerance = 1e-6 * Math.max(...diagonal)
+  if (diagonal.some((v) => v <= 0) || [1, 2, 4, 6, 8, 9].some((i) => Math.abs(manifest.vox2ras[i]) > tolerance)) {
+    throw new CaseLoadError(
+      `${manifestUrl}: vox2ras is not RAS-canonical (positive diagonal, no rotation); the 2D panel would show wrong laterality`,
+    )
+  }
+
   const frame = makeFrame(manifest)
   const flairUrl = baseUrl + manifest.volumes.flair
   const maskUrl = baseUrl + manifest.volumes.mask
