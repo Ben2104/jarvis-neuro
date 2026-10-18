@@ -18,6 +18,28 @@ UI mockup: https://claude.ai/artifact/Dv2dBD77PWE6JrzWnantHv (private)
 | 7 | Backend | FastAPI only (Python). It hosts the agent harness and serves the baked files. No Fastify. |
 | 8 | Frontend | Vite + React + TypeScript + `@react-three/fiber` + drei. MediaPipe Hands for gestures. |
 
+### Stack
+
+| Layer | Pick |
+|---|---|
+| Frontend | Vite, React, TypeScript, three + `@react-three/fiber` + drei, `@mediapipe/tasks-vision`, zod, vitest |
+| Backend | Python 3.11+, `uv`, FastAPI + uvicorn, pydantic v2, WebSocket, pytest |
+| Agents | Strands Agents SDK (Python), in the FastAPI process |
+| Bake | nibabel, numpy, scipy, scikit-image, trimesh, MONAI + torch. It lives inside the backend package, so a later live-inference endpoint reuses the same meshing and stats code. |
+
+The model provider is chosen by environment variables, and no provider is hard-coded. Gemini is used for
+development, through `strands-agents[gemini]` and `GeminiModel`. The demo provider is decided before rehearsal,
+and every rehearsal runs on that provider.
+
+```
+MODEL_PROVIDER=gemini|anthropic
+ORCHESTRATOR_MODEL=<model id>
+REASONER_MODEL=<model id>
+GEMINI_API_KEY / ANTHROPIC_API_KEY
+```
+
+Model IDs in §5 are defaults for the Anthropic provider.
+
 ### Consequences of decision 1
 
 The scan's own surface has no named structures. The following are therefore **out of scope**:
