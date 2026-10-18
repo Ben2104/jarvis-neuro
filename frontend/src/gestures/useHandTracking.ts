@@ -94,13 +94,9 @@ export function useHandTracking(): void {
         if (cancelled || !landmarker) return
         if (video.currentTime !== lastVideoTime) {
           lastVideoTime = video.currentTime
+          let result: ReturnType<HandLandmarker['detectForVideo']>
           try {
-            const result = landmarker.detectForVideo(video, performance.now())
-            const { state, events } = stepGesture(gesture.current, result.landmarks)
-            const handsChanged = state.hands !== gesture.current.hands
-            gesture.current = state
-            for (const e of events) gestureBus.emit(e)
-            if (handsChanged) setWebcam({ hands: state.hands })
+            result = landmarker.detectForVideo(video, performance.now())
           } catch (e) {
             if (!cancelled) {
               setWebcam({ status: 'unavailable', hands: 0, error: `hand tracking stopped: ${messageOf(e)}` })
@@ -108,6 +104,11 @@ export function useHandTracking(): void {
             }
             return
           }
+          const { state, events } = stepGesture(gesture.current, result.landmarks)
+          const handsChanged = state.hands !== gesture.current.hands
+          gesture.current = state
+          for (const e of events) gestureBus.emit(e)
+          if (handsChanged) setWebcam({ hands: state.hands })
         }
         raf = requestAnimationFrame(tick)
       }
