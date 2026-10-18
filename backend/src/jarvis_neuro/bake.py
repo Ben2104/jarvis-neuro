@@ -39,7 +39,7 @@ def bake_case(case: LoadedCase, seg: np.ndarray, provenance: str, out_dir: Path,
 
     v, f = smooth_and_decimate(*mesh_from_mask(brain, A, sigma=1.0), BRAIN_TARGET_FACES)
     nodes = [("brain_surface", v, f)]
-    assets: list = [SurfaceAsset(id="brain_surface", node="brain_surface")]
+    assets: list = [SurfaceAsset(id="brain_surface", node="brain_surface", kind="surface")]
     for label in TUMOR_LABELS:
         m = seg == label
         if not m.any():
@@ -52,7 +52,7 @@ def bake_case(case: LoadedCase, seg: np.ndarray, provenance: str, out_dir: Path,
         nodes.append((name, v, f))
         lo, hi = bbox_ras(m, A)
         assets.append(TumorAsset(
-            id=name, label=label, node=name, color=COLOR_BY_LABEL[label],
+            id=name, label=label, node=name, kind="tumor", color=COLOR_BY_LABEL[label],
             volume_ml=volume_ml(m, A), centroid_ras=_vec(centroid_ras(m, A)), bbox_ras=(_vec(lo), _vec(hi)),
             min_dist_surface_mm=min_dist_surface_mm(m, brain, A),
         ))

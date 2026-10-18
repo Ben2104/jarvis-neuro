@@ -21,14 +21,14 @@ class _Strict(BaseModel):
 class SurfaceAsset(_Strict):
     id: Literal["brain_surface"]
     node: str
-    kind: Literal["surface"] = "surface"
+    kind: Literal["surface"]
 
 
 class TumorAsset(_Strict):
     id: Literal["tumor_et", "tumor_ncr", "tumor_ed"]
     label: Literal[1, 2, 3]
     node: str
-    kind: Literal["tumor"] = "tumor"
+    kind: Literal["tumor"]
     color: Annotated[str, Field(pattern=r"^#[0-9A-Fa-f]{6}$")]
     volume_ml: Annotated[float, Field(ge=0)]
     centroid_ras: Vec3
@@ -65,6 +65,15 @@ class Manifest(_Strict):
     glb: str
     assets: list[Asset]
     metrics: Metrics
+
+    @model_validator(mode="after")
+    def _valid_assets(self):
+        ids = [asset.id for asset in self.assets]
+        if ids.count("brain_surface") != 1:
+            raise ValueError("assets must contain exactly one brain_surface")
+        if len(ids) != len(set(ids)):
+            raise ValueError("asset ids must be unique")
+        return self
 
 
 class IndexEntry(_Strict):

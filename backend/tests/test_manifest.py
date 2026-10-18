@@ -11,7 +11,7 @@ from jarvis_neuro.manifest import (
 
 
 def et_asset(**over):
-    base = dict(id="tumor_et", label=3, node="tumor_et", color="#E8705A", volume_ml=1.2,
+    base = dict(id="tumor_et", label=3, node="tumor_et", kind="tumor", color="#E8705A", volume_ml=1.2,
                 centroid_ras=(1.0, 2.0, 3.0), bbox_ras=((0.0, 0.0, 0.0), (2.0, 2.0, 2.0)), min_dist_surface_mm=4.0)
     base.update(over)
     return TumorAsset(**base)
@@ -22,7 +22,7 @@ def sample(**over):
         case_id="synth_001", provenance="synthetic", dims=(4, 5, 6),
         vox2ras=np.eye(4).ravel().tolist(), ras2gl=RAS2GL.ravel().tolist(), midline_x_ras=0.0,
         volumes=Volumes(flair="flair_u8.bin", mask="mask_u8.bin"), glb="case.glb",
-        assets=[SurfaceAsset(id="brain_surface", node="brain_surface"), et_asset()], metrics=Metrics(),
+        assets=[SurfaceAsset(id="brain_surface", node="brain_surface", kind="surface"), et_asset()], metrics=Metrics(),
     )
     base.update(over)
     return Manifest(**base)
@@ -47,6 +47,33 @@ def test_tumor_label_must_match_id():
 
 def test_schema_file_is_current():
     assert json.loads(SCHEMA_PATH.read_text()) == Manifest.model_json_schema()
+
+
+@pytest.mark.parametrize("asset_type", ["SurfaceAsset", "TumorAsset"])
+def test_schema_requires_asset_kind(asset_type):
+    schema = Manifest.model_json_schema()
+    assert "kind" in schema["$defs"][asset_type]["required"]
+
+
+@pytest.mark.parametrize("asset_index,model", [(0, SurfaceAsset), (1, TumorAsset)])
+def test_asset_constructors_require_kind(asset_index, model):
+    payload = sample().assets[asset_index].model_dump()
+    payload.pop("kind")
+    with pytest.raises(ValidationError, match="kind"):
+        model.model_validate(payload)
+
+
+@pytest.mark.parametrize("brain_count", [0, 2])
+def test_manifest_requires_exactly_one_brain_surface(brain_count):
+    brain = SurfaceAsset(id="brain_surface", node="brain_surface", kind="surface")
+    with pytest.raises(ValidationError, match="exactly one brain_surface"):
+        sample(assets=[brain] * brain_count + [et_asset()])
+
+
+def test_manifest_rejects_duplicate_asset_ids():
+    assets = sample().assets
+    with pytest.raises(ValidationError, match="unique"):
+        sample(assets=assets + [et_asset()])
 
 
 def test_index_upserts_by_case_and_provenance(tmp_path):
