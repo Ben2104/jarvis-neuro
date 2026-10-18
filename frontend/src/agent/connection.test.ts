@@ -26,11 +26,12 @@ class FakeSocket implements SocketLike {
   }
 }
 
-function harness() {
+function harness(failOpen: () => boolean = () => false) {
   const sockets: FakeSocket[] = []
   const timers: { fn: () => void; ms: number }[] = []
   const deps: ConnectionDeps = {
     open: () => {
+      if (failOpen()) throw new SyntaxError("Failed to construct 'WebSocket': The URL is invalid.")
       const s = new FakeSocket()
       sockets.push(s)
       return s
@@ -118,5 +119,60 @@ describe('AgentConnection', () => {
     h2.sockets[0].drop() // the late close event of the stopped socket
     expect(h2.timers).toEqual([])
     expect(h2.conn.send({ type: 'user', turn_id: 't', text: 'x' })).toBe(false)
+  })
+
+  it('survives a socket constructor that throws and retries with backoff', () => {
+    let fail = true
+    const h = harness(() => fail)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    expect(() => h.conn.start()).not.toThrow()
+    expect(h.links).toEqual(['connecting', 'closed'])
+    expect(h.timers.map((t) => t.ms)).toEqual([500])
+    h.timers[0].fn()
+    expect(h.timers.map((t) => t.ms)).toEqual([500, 1000])
+    fail = false
+    h.timers[1].fn()
+    h.sockets[0].open()
+    expect(h.links.at(-1)).toBe('open')
+    expect(h.conn.send({ type: 'user', turn_id: 't', text: 'x' })).toBe(true)
+    warn.mockRestore()
+  })
+
+  it('does not retry a failed construction after stop', () => {
+    const h = harness(() => true)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    h.conn.start()
+    h.conn.stop()
+    expect(h.deps.cancel).toHaveBeenCalledOnce()
+    warn.mockRestore()
+  })
+
+  it('ignores events from a stopped socket, even through handlers captured before stop', () => {
+    const h = harness()
+    h.conn.start()
+    const sock = h.sockets[0]
+    const { onopen, onmessage, onclose } = sock
+    h.conn.stop()
+    const before = [...h.links]
+    onopen?.()
+    onmessage?.({ data: '{"type":"busy","busy":true}' })
+    onclose?.()
+    sock.open()
+    sock.onmessage?.({ data: '{"type":"busy","busy":true}' })
+    expect(h.links).toEqual(before)
+    expect(h.messages).toEqual([])
+    expect(h.timers).toEqual([])
+  })
+
+  it('ignores events from an old socket after a restart', () => {
+    const h = harness()
+    h.conn.start()
+    const old = h.sockets[0]
+    const { onopen } = old
+    h.conn.stop()
+    h.conn.start()
+    const linksBefore = h.links.length
+    onopen?.()
+    expect(h.links.length).toBe(linksBefore)
   })
 })

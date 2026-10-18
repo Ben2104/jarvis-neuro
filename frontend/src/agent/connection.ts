@@ -67,7 +67,11 @@ export class AgentConnection {
     this.timer = null
     const s = this.socket
     this.socket = null
-    s?.close()
+    if (s) {
+      // Detach first so a late event from this socket cannot reach the handlers.
+      s.onopen = s.onmessage = s.onclose = s.onerror = null
+      s.close()
+    }
     this.on.link('closed')
   }
 
@@ -80,27 +84,43 @@ export class AgentConnection {
 
   private connect(): void {
     this.on.link('connecting')
-    const s = this.deps.open(this.url)
+    let s: SocketLike
+    try {
+      s = this.deps.open(this.url)
+    } catch (e) {
+      // An invalid URL throws here, before any event. The viewer must keep working, so retry like a failed connect.
+      console.warn('[agent] could not open the socket:', e instanceof Error ? e.message : String(e))
+      this.on.link('closed')
+      this.scheduleReconnect()
+      return
+    }
     this.socket = s
+    const live = () => this.socket === s && !this.stopped
     s.onopen = () => {
+      if (!live()) return
       this.attempt = 0
       this.on.link('open')
     }
     s.onmessage = (e) => {
+      if (!live()) return
       const msg = parseServerMessage(e.data)
       if (msg) this.on.message(msg)
       else console.warn('[agent] ignored a malformed server message')
     }
     s.onerror = () => {} // a close event always follows
     s.onclose = () => {
-      if (this.socket !== s) return
+      if (!live()) return
       this.socket = null
       this.on.link('closed')
-      if (this.stopped) return
-      this.timer = this.deps.schedule(() => {
-        this.timer = null
-        this.connect()
-      }, backoffMs(this.attempt++))
+      this.scheduleReconnect()
     }
+  }
+
+  private scheduleReconnect(): void {
+    if (this.stopped) return
+    this.timer = this.deps.schedule(() => {
+      this.timer = null
+      this.connect()
+    }, backoffMs(this.attempt++))
   }
 }

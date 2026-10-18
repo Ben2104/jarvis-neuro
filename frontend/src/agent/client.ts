@@ -28,9 +28,16 @@ export function startAgentClient(
   const note = (role: 'user' | 'agent' | 'error', text: string) =>
     s().addTranscript({ id: newCallId(role), role, text, at: Date.now() })
 
+  // Bumped whenever the socket is replaced or closed. A tool call answers only on the connection it arrived on.
+  let generation = 0
+  let lastCase: string | null = null
+
   const sendCase = () => {
     const c = s().current
-    if (c) transport.send({ type: 'case', case_id: c.manifest.case_id, provenance: c.manifest.provenance })
+    if (!c) return
+    const key = `${c.manifest.case_id}/${c.manifest.provenance}`
+    if (key === lastCase) return
+    if (transport.send({ type: 'case', case_id: c.manifest.case_id, provenance: c.manifest.provenance })) lastCase = key
   }
 
   const onMessage = async (msg: ServerMessage) => {
@@ -42,8 +49,10 @@ export function startAgentClient(
         s().setAgent({ busy: msg.busy })
         return
       case 'tool_call': {
+        const arrivedOn = generation
         const result = await executeTool(store, { id: msg.id, name: msg.name, args: msg.args }, 'agent')
-        transport.send({ type: 'tool_result', ...result })
+        // The server fails a pending call when its socket closes; a late answer must not reach a newer socket.
+        if (arrivedOn === generation) transport.send({ type: 'tool_result', ...result })
         return
       }
       case 'reply':
@@ -59,6 +68,10 @@ export function startAgentClient(
   const transport = makeTransport({
     message: (msg) => void onMessage(msg),
     link(event) {
+      if (event !== 'open') {
+        generation += 1
+        lastCase = null
+      }
       if (event === 'closed') s().setAgent({ link: 'offline', busy: false })
       else s().setAgent({ link: 'connecting' })
       if (event === 'open') sendCase()

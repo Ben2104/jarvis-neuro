@@ -5,8 +5,8 @@ import { NOT_CONNECTED, type Transport, startAgentClient } from './client'
 import type { ConnectionHandlers } from './connection'
 import type { ClientMessage } from './protocol'
 
-async function setup() {
-  const store = createViewerStore({ fetchFn: fsFetch() })
+async function setup(fetchFn: typeof fetch = fsFetch()) {
+  const store = createViewerStore({ fetchFn })
   await store.getState().loadIndex()
   await store.getState().loadCase('synth_001')
   const sent: ClientMessage[] = []
@@ -115,11 +115,94 @@ describe('startAgentClient', () => {
   it('tells the server when the case changes, and stop unsubscribes', async () => {
     const h = await setup()
     h.connect()
-    await h.store.getState().loadCase('synth_001')
+    expect(h.sent.filter((m) => m.type === 'case')).toHaveLength(1)
+    await h.store.getState().loadCase('brats_001', 'ground-truth')
+    expect(h.sent.filter((m) => m.type === 'case').at(-1)).toEqual({
+      type: 'case',
+      case_id: 'brats_001',
+      provenance: 'ground-truth',
+    })
     expect(h.sent.filter((m) => m.type === 'case')).toHaveLength(2)
     h.client.stop()
     expect(h.transport.stop).toHaveBeenCalledOnce()
     await h.store.getState().loadCase('synth_001')
     expect(h.sent.filter((m) => m.type === 'case')).toHaveLength(2)
+  })
+
+  it('sends one case message when the same case is loaded again, and resends after a reconnect', async () => {
+    const h = await setup()
+    h.connect()
+    await h.store.getState().loadCase('synth_001')
+    await h.store.getState().loadCase('synth_001')
+    expect(h.sent.filter((m) => m.type === 'case')).toHaveLength(1)
+    h.on().link('closed')
+    h.connect()
+    expect(h.sent.filter((m) => m.type === 'case')).toHaveLength(2)
+  })
+
+  it('answers an unknown tool with exactly one failed tool_result', async () => {
+    const h = await setup()
+    h.connect()
+    h.on().message({ type: 'tool_call', id: 'srv-9', name: 'launch_missiles', args: {} })
+    await h.flush()
+    const results = h.sent.filter((m) => m.type === 'tool_result')
+    expect(results).toHaveLength(1)
+    expect(results[0]).toMatchObject({ id: 'srv-9', ok: false })
+  })
+
+  it('answers a tool that throws with exactly one failed tool_result', async () => {
+    const h = await setup()
+    h.connect()
+    const state = h.store.getState()
+    vi.spyOn(state, 'setExplode').mockImplementation(() => {
+      throw new Error('boom')
+    })
+    h.on().message({ type: 'tool_call', id: 'srv-10', name: 'set_explode', args: { value: 1 } })
+    await h.flush()
+    const results = h.sent.filter((m) => m.type === 'tool_result')
+    expect(results).toHaveLength(1)
+    expect(results[0]).toMatchObject({ id: 'srv-10', ok: false, error: expect.stringContaining('boom') })
+  })
+
+  it('shows the busy error in the transcript and leaves the busy flag alone', async () => {
+    const h = await setup()
+    h.connect()
+    h.on().message({ type: 'busy', busy: true })
+    h.on().message({ type: 'error', turn_id: 't9', message: 'busy: a turn is already running' })
+    expect(h.store.getState().transcript.at(-1)).toMatchObject({
+      role: 'error',
+      text: 'busy: a turn is already running',
+    })
+    expect(h.store.getState().agent.busy).toBe(true)
+  })
+
+  it('drops a tool result that completes after the socket was replaced', async () => {
+    let armed = false
+    let release!: () => void
+    const gate = new Promise<void>((r) => {
+      release = r
+    })
+    const base = fsFetch()
+    const h = await setup((async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (armed && String(input).includes('mask_u8')) await gate
+      return base(input, init)
+    }) as typeof fetch)
+    h.connect()
+    armed = true
+    h.on().message({ type: 'tool_call', id: 'srv-old', name: 'load_case', args: { case_id: 'synth_001' } })
+    h.on().link('closed')
+    h.connect()
+    release()
+    await vi.waitFor(() => expect(h.store.getState().toolLog.some((e) => e.name === 'load_case')).toBe(true))
+    await h.flush()
+    expect(h.sent.filter((m) => m.type === 'tool_result')).toEqual([])
+  })
+
+  it('still answers a tool call that completes on the same connection', async () => {
+    const h = await setup()
+    h.connect()
+    h.on().message({ type: 'tool_call', id: 'srv-ok', name: 'set_explode', args: { value: 1 } })
+    await h.flush()
+    expect(h.sent.filter((m) => m.type === 'tool_result')).toHaveLength(1)
   })
 })
