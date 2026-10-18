@@ -1,0 +1,139 @@
+{
+  "case_id": "brats_010",
+  "provenance": "ground-truth",
+  "dims": [
+    240,
+    240,
+    155
+  ],
+  "vox2ras": [
+    1.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0
+  ],
+  "ras2gl": [
+    -1.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0
+  ],
+  "midline_x_ras": 119.0,
+  "volumes": {
+    "flair": "flair_u8.bin",
+    "mask": "mask_u8.bin"
+  },
+  "glb": "case.glb",
+  "assets": [
+    {
+      "id": "brain_surface",
+      "node": "brain_surface",
+      "kind": "surface"
+    },
+    {
+      "id": "tumor_et",
+      "label": 3,
+      "node": "tumor_et",
+      "kind": "tumor",
+      "color": "#E8705A",
+      "volume_ml": 4.467,
+      "centroid_ras": [
+        84.66442802775913,
+        68.73360197000224,
+        96.77658383702709
+      ],
+      "bbox_ras": [
+        [
+          75.0,
+          58.0,
+          84.0
+        ],
+        [
+          96.0,
+          79.0,
+          110.0
+        ]
+      ],
+      "min_dist_surface_mm": 7.14142842854285
+    },
+    {
+      "id": "tumor_ncr",
+      "label": 2,
+      "node": "tumor_ncr",
+      "kind": "tumor",
+      "color": "#7A2E3A",
+      "volume_ml": 0.413,
+      "centroid_ras": [
+        83.8861985472155,
+        69.30266343825666,
+        96.05569007263922
+      ],
+      "bbox_ras": [
+        [
+          76.0,
+          60.0,
+          83.0
+        ],
+        [
+          93.0,
+          76.0,
+          106.0
+        ]
+      ],
+      "min_dist_surface_mm": 11.0
+    },
+    {
+      "id": "tumor_ed",
+      "label": 1,
+      "node": "tumor_ed",
+      "kind": "tumor",
+      "color": "#E3A857",
+      "volume_ml": 15.607,
+      "centroid_ras": [
+        86.1249439354136,
+        69.5341833792529,
+        87.16460562568078
+      ],
+      "bbox_ras": [
+        [
+          64.0,
+          44.0,
+          70.0
+        ],
+        [
+          106.0,
+          91.0,
+          110.0
+        ]
+      ],
+      "min_dist_surface_mm": 3.0
+    }
+  ],
+  "metrics": {
+    "dice_vs_gt": null
+  }
+}
