@@ -150,7 +150,8 @@ load_case(case_id)                                  → summary of manifest asse
 set_opacity(asset_id, value: 0..1)
 focus_region(asset_id)                              camera fits asset bbox
 set_cutaway(plane: axial|coronal|sagittal|none, ras_mm)
-hide_hemisphere(side: left|right|none)              clip plane at midline_x_ras
+hide_hemisphere(side: left|right|none)              hides that half of brain_surface (split at midline_x_ras)
+set_explode(value: 0..1)                            hemispheres and tumour sub-regions move apart
 toggle_visibility(asset_ids[], visible)
 inspect_mri_slice(axis: axial|coronal|sagittal, index)
 explain(question)                                   → Clinical Reasoner
@@ -178,6 +179,11 @@ numeric ranges are clamped. Validation errors go back to the LLM as tool results
   - A 2D canvas reads slices straight from the `Uint8Array` volumes.
   - The mask outline is drawn where a voxel's label differs from its neighbour's.
   - The crosshair and the 3D marker are linked through `vox2ras` and its inverse.
+- Explode view: `brain_surface` is two meshes, one per hemisphere, clipped at `midline_x_ras`. At amount `t` the halves
+  slide apart along x by `t * 0.35 * brain width`, and tumour sub-regions travel with their hemisphere and separate
+  radially from the brain centre by `t * 0.25 * brain width * rank` (rank 0 = largest volume). The brain box is
+  measured from the GLB at load. Clipping planes move with their mesh. In gesture mode, dragging a held pinch up
+  pulls the parts apart.
 - Every tool has a keyboard shortcut as the demo fallback.
 
 ### Gestures

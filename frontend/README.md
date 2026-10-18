@@ -32,12 +32,13 @@ Cases come from the bake pipeline (`../backend`, Plan A). The viewer reads `publ
 | `[` `]` | brain surface opacity −0.1 / +0.1 |
 | `c` | cutaway: off → axial → coronal → sagittal → off |
 | `h` | hide hemisphere: none → left → right → none |
+| `e` | explode view: 0 → 50% → 100% → 0 |
 | `f` | focus the selected sub-region (the first tumour sub-region if none is selected) |
 | `b` / `t` | toggle brain surface / all tumour sub-regions |
 | `n` | next case in the index |
 | `g` | webcam gesture mode on/off |
 
-Gesture mode: the camera shows mirrored and dimmed behind the 3D view, so you can watch your hand touch the brain. An open hand rotates, a pinch selects what is under the reticle, and two hands moving apart or together zoom. If the camera is denied or missing, the header says so and mouse and keyboard keep working.
+Gesture mode: the camera shows mirrored and dimmed behind the 3D view, so you can watch your hand touch the brain. An open hand rotates, a pinch selects what is under the reticle, and two hands moving apart or together zoom. Holding a pinch and moving it up pulls the hemispheres and tumour sub-regions apart (down closes them again). If the camera is denied or missing, the header says so and mouse and keyboard keep working.
 Open your hand before pinching: a pinch only selects after the hand has been seen open, so a tracking dropout mid-pinch cannot select twice.
 
 ## Layout of `src/`
@@ -57,7 +58,7 @@ Open your hand before pinching: a pinch only selects after the hand has been see
 await __jarvis.executeTool(__jarvis.store, { id: 'x', name: 'focus_region', args: { asset_id: 'tumor_et' } })
 ```
 
-Tools: `load_case`, `set_opacity`, `focus_region`, `set_cutaway`, `hide_hemisphere`, `toggle_visibility`, `inspect_mri_slice`.
+Tools: `load_case`, `set_opacity`, `focus_region`, `set_cutaway`, `hide_hemisphere`, `set_explode`, `toggle_visibility`, `inspect_mri_slice`.
 
 ## Known limits
 
