@@ -26,12 +26,14 @@ export function useHandTracking(): void {
     let stream: MediaStream | null = null
     let landmarker: HandLandmarker | null = null
     let raf = 0
+    let onVideoEnded: (() => void) | null = null
     const video = document.createElement('video')
     video.muted = true
     video.playsInline = true
 
     const stop = () => {
       cancelAnimationFrame(raf)
+      if (onVideoEnded) stream?.getVideoTracks()[0]?.removeEventListener('ended', onVideoEnded)
       stream?.getTracks().forEach((t) => t.stop())
       landmarker?.close()
       video.srcObject = null
@@ -79,6 +81,13 @@ export function useHandTracking(): void {
       }
       if (cancelled) return stop()
       setWebcam({ status: 'on', hands: 0, error: null })
+      onVideoEnded = () => {
+        if (cancelled) return
+        setWebcam({ status: 'unavailable', hands: 0, error: 'camera stopped' })
+        gestureBus.emit({ type: 'lost' })
+        cancelAnimationFrame(raf)
+      }
+      stream.getVideoTracks()[0]?.addEventListener('ended', onVideoEnded)
 
       let lastVideoTime = -1
       const tick = () => {
