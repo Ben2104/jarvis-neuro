@@ -23,6 +23,7 @@ export const SHORTCUTS: Shortcut[] = [
   { keys: ['T'], label: 'Show / hide tumour', tool: 'toggle_visibility' },
   { keys: ['N'], label: 'Next case', tool: 'load_case' },
   { keys: ['G'], label: 'Gesture mode on / off', tool: null },
+  { keys: ['V'], label: 'Voice input on / off', tool: null },
 ]
 
 const AXIS_KEYS: Record<string, Axis> = { '1': 'axial', '2': 'coronal', '3': 'sagittal' }

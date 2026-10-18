@@ -514,3 +514,48 @@ kbd {
   filter: brightness(0.65);
   pointer-events: none;
 }
+.transcript {
+  list-style: none;
+  margin: 0;
+  padding: 12px 14px;
+  max-height: 220px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.turn {
+  display: flex;
+  gap: 8px;
+  font-size: 14px;
+}
+.turn .k {
+  flex: 0 0 48px;
+}
+.turn.error {
+  color: var(--danger);
+}
+.ask {
+  display: flex;
+  gap: 8px;
+  padding: 0 14px 10px;
+}
+.ask input[type='text'] {
+  flex: 1;
+  min-width: 0;
+  height: 40px;
+  padding: 0 10px;
+  font-size: 14px;
+  color: var(--text);
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.ask .btn[aria-pressed='true'] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

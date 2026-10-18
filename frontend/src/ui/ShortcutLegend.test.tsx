@@ -8,4 +8,6 @@ it('renders the keyboard fallback legend', () => {
   expect(html).toContain('<kbd>C</kbd>')
   expect(html).toContain('Cycle cutaway plane')
   expect(html).toContain('Focus selection')
+  expect(html).toContain('<kbd>V</kbd>')
+  expect(html).toContain('Voice input on / off')
 })

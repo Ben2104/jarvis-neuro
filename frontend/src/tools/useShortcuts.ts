@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { toggleVoice } from '../agent'
 import { viewerStore } from '../state/store'
 import { runTools } from '../ui/controls'
 import { normalizeKey, shortcutToCall } from './shortcuts'
@@ -11,8 +12,13 @@ export function useShortcuts(): void {
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey || e.repeat || isTyping(e.target)) return
       const s = viewerStore.getState()
-      if (normalizeKey(e.key) === 'g') {
+      const key = normalizeKey(e.key)
+      if (key === 'g') {
         s.setGesturesOn(!s.gesturesOn)
+        return
+      }
+      if (key === 'v') {
+        toggleVoice()
         return
       }
       const req = shortcutToCall(e.key, s)
