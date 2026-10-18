@@ -1,0 +1,9 @@
+{
+  "cases": [
+    {
+      "case_id": "synth_001",
+      "provenance": "synthetic",
+      "path": "synth_001/synthetic/manifest.json"
+    }
+  ]
+}

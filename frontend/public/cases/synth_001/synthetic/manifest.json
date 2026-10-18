@@ -1,0 +1,139 @@
+{
+  "case_id": "synth_001",
+  "provenance": "synthetic",
+  "dims": [
+    56,
+    64,
+    48
+  ],
+  "vox2ras": [
+    3.0,
+    0.0,
+    0.0,
+    -81.0,
+    0.0,
+    3.0,
+    0.0,
+    -96.0,
+    0.0,
+    0.0,
+    3.0,
+    -72.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0
+  ],
+  "ras2gl": [
+    -1.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0
+  ],
+  "midline_x_ras": 0.0,
+  "volumes": {
+    "flair": "flair_u8.bin",
+    "mask": "mask_u8.bin"
+  },
+  "glb": "case.glb",
+  "assets": [
+    {
+      "id": "brain_surface",
+      "node": "brain_surface",
+      "kind": "surface"
+    },
+    {
+      "id": "tumor_et",
+      "label": 3,
+      "node": "tumor_et",
+      "kind": "tumor",
+      "color": "#E8705A",
+      "volume_ml": 13.014,
+      "centroid_ras": [
+        -24.0,
+        12.0,
+        9.0
+      ],
+      "bbox_ras": [
+        [
+          -39.0,
+          -3.0,
+          -6.0
+        ],
+        [
+          -9.0,
+          27.0,
+          24.0
+        ]
+      ],
+      "min_dist_surface_mm": 26.153393661244042
+    },
+    {
+      "id": "tumor_ncr",
+      "label": 2,
+      "node": "tumor_ncr",
+      "kind": "tumor",
+      "color": "#7A2E3A",
+      "volume_ml": 6.939,
+      "centroid_ras": [
+        -24.0,
+        12.0,
+        9.0
+      ],
+      "bbox_ras": [
+        [
+          -36.0,
+          0.0,
+          -3.0
+        ],
+        [
+          -12.0,
+          24.0,
+          21.0
+        ]
+      ],
+      "min_dist_surface_mm": 31.0322412983658
+    },
+    {
+      "id": "tumor_ed",
+      "label": 1,
+      "node": "tumor_ed",
+      "kind": "tumor",
+      "color": "#E3A857",
+      "volume_ml": 18.36,
+      "centroid_ras": [
+        -24.0,
+        12.0,
+        9.0
+      ],
+      "bbox_ras": [
+        [
+          -45.0,
+          -9.0,
+          -12.0
+        ],
+        [
+          -3.0,
+          33.0,
+          30.0
+        ]
+      ],
+      "min_dist_surface_mm": 21.840329667841555
+    }
+  ],
+  "metrics": {
+    "dice_vs_gt": null
+  }
+}
