@@ -1,13 +1,21 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { type LoadedCase, fetchCase } from '../lib/loadCase'
+import type { CaseIndexEntry } from '../lib/manifest'
 
 export const FRONTEND_DIR = fileURLToPath(new URL('../../', import.meta.url))
 export const PUBLIC_DIR = join(FRONTEND_DIR, 'public')
 export const SYNTH_DIR = join(PUBLIC_DIR, 'cases/synth_001/synthetic')
 export const SHARED_SCHEMA_PATH = join(FRONTEND_DIR, '..', 'shared', 'manifest.schema.json')
 
-// eslint-style escape hatch: fixtures are untyped JSON that tests mutate on purpose.
+export const synthEntry: CaseIndexEntry = {
+  case_id: 'synth_001',
+  provenance: 'synthetic',
+  path: 'synth_001/synthetic/manifest.json',
+}
+
+// Fixtures are untyped JSON that tests mutate on purpose.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function readJson(path: string): any {
   return JSON.parse(readFileSync(path, 'utf8'))
@@ -35,4 +43,9 @@ export function fsFetch(overrides: Record<string, () => Response> = {}): typeof 
     if (!existsSync(file)) return new Response('not found', { status: 404 })
     return new Response(new Uint8Array(readFileSync(file)))
   }) as typeof fetch
+}
+
+/** The committed synthetic case, loaded through the real loader and GLTFLoader. */
+export function loadSynth(): Promise<LoadedCase> {
+  return fetchCase(synthEntry, { fetchFn: fsFetch() })
 }
