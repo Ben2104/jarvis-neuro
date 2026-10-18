@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { expect, it } from 'vitest'
 import type { AgentState, TranscriptEntry } from '../state/store'
-import { AgentConsoleView } from './AgentConsole'
+import { AgentConsoleView, canSend } from './AgentConsole'
 
 const agent = (patch: Partial<AgentState> = {}): AgentState => ({
   link: 'offline',
@@ -46,4 +46,11 @@ it('renders the transcript, the thinking line and a pressed mic while listening'
   expect(html).toContain('Thinking…')
   expect(html).toContain('aria-pressed="true"')
   expect(html).toContain('Listening…')
+})
+
+it('allows Send only for text, online and not mid-turn', () => {
+  expect(canSend(agent({ link: 'online' }), 'hide the left')).toBe(true)
+  expect(canSend(agent({ link: 'online', busy: true }), 'hide the left')).toBe(false)
+  expect(canSend(agent({ link: 'offline' }), 'hide the left')).toBe(false)
+  expect(canSend(agent({ link: 'online' }), '   ')).toBe(false)
 })

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   type RecognitionEventLike,
   type RecognitionLike,
+  cancelSpeech,
   createListener,
   finalText,
   recognitionCtor,
@@ -23,6 +24,7 @@ class FakeRecognition implements RecognitionLike {
   onerror: RecognitionLike['onerror'] = null
   onend: RecognitionLike['onend'] = null
   started = false
+  aborted = false
   constructor() {
     FakeRecognition.last = this
   }
@@ -33,7 +35,9 @@ class FakeRecognition implements RecognitionLike {
   stop() {
     this.onend?.()
   }
-  abort() {}
+  abort() {
+    this.aborted = true
+  }
 }
 
 const handlers = () => ({ text: vi.fn(), listening: vi.fn(), error: vi.fn() })
@@ -90,5 +94,33 @@ describe('speech', () => {
       constructor(public t: string) {}
     })
     expect(calls).toEqual(['cancel', 'speak:Done.'])
+  })
+
+  it('aborts a running recognition at once and ignores its late events', () => {
+    const on = handlers()
+    const l = createListener(FakeRecognition, on)
+    l.start()
+    const r = FakeRecognition.last!
+    const late = r.onresult
+    l.abort()
+    expect(r.aborted).toBe(true)
+    expect(on.listening).toHaveBeenLastCalledWith(false)
+    late?.(event(['too late', true]))
+    expect(on.text).not.toHaveBeenCalled()
+    l.start() // a fresh recognition can start again
+    expect(FakeRecognition.last).not.toBe(r)
+  })
+
+  it('abort without a running recognition does nothing', () => {
+    const on = handlers()
+    createListener(FakeRecognition, on).abort()
+    expect(on.listening).not.toHaveBeenCalled()
+  })
+
+  it('cancels speech when muted, and tolerates a browser without speechSynthesis', () => {
+    const cancel = vi.fn()
+    cancelSpeech({ cancel })
+    expect(cancel).toHaveBeenCalledOnce()
+    expect(() => cancelSpeech(undefined)).not.toThrow()
   })
 })

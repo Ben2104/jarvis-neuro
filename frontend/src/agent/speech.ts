@@ -53,7 +53,10 @@ export interface ListenerHandlers {
 
 export interface Listener {
   start(): void
+  /** Ends the utterance; a result already heard is still delivered. */
   stop(): void
+  /** Drops the recognition at once and ignores anything it reports later. */
+  abort(): void
 }
 
 /** Single-shot listener: one utterance per start(), final result only. */
@@ -69,14 +72,17 @@ export function createListener(ctor: RecognitionCtor, on: ListenerHandlers, lang
       r.interimResults = false
       r.maxAlternatives = 1
       r.onresult = (e) => {
+        if (rec !== r) return
         const text = finalText(e)
         if (text) on.text(text)
       }
       r.onerror = (e) => {
+        if (rec !== r) return
         const message = speechErrorText(e.error)
         if (message) on.error(message)
       }
       r.onend = () => {
+        if (rec !== r) return
         rec = null
         on.listening(false)
       }
@@ -91,6 +97,14 @@ export function createListener(ctor: RecognitionCtor, on: ListenerHandlers, lang
     stop() {
       rec?.stop()
     },
+    abort() {
+      const r = rec
+      if (!r) return
+      rec = null
+      r.onresult = r.onerror = r.onend = null
+      r.abort()
+      on.listening(false)
+    },
   }
 }
 
@@ -103,4 +117,13 @@ export interface SynthLike {
 export function speak(text: string, synth: SynthLike, Utterance: new (text: string) => unknown): void {
   synth.cancel()
   synth.speak(new Utterance(text))
+}
+
+/** Stops any reply still being read out. Safe where speechSynthesis does not exist. */
+export function cancelSpeech(synth: Pick<SynthLike, 'cancel'> | undefined = browserSynth()): void {
+  synth?.cancel()
+}
+
+function browserSynth(): SynthLike | undefined {
+  return typeof speechSynthesis === 'undefined' ? undefined : speechSynthesis
 }

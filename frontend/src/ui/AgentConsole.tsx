@@ -1,5 +1,5 @@
 import { type FormEvent, useState } from 'react'
-import { sendText, toggleVoice, voiceSupported } from '../agent'
+import { sendText, setSpeakReplies, toggleVoice, voiceSupported } from '../agent'
 import { type AgentState, type ToolLogEntry, type TranscriptEntry, useViewer, viewerStore } from '../state/store'
 
 const LINK_TEXT: Record<AgentState['link'], string> = {
@@ -18,6 +18,10 @@ export function AgentConsole() {
   return <AgentConsoleView agent={agent} transcript={transcript} log={log} canListen={voiceSupported()} />
 }
 
+/** Send needs an online agent that is not mid-turn (the server rejects overlapping turns) and some text. */
+export const canSend = (agent: AgentState, draft: string): boolean =>
+  agent.link === 'online' && !agent.busy && draft.trim() !== ''
+
 export interface AgentConsoleViewProps {
   agent: AgentState
   transcript: TranscriptEntry[]
@@ -32,7 +36,7 @@ export function AgentConsoleView({ agent, transcript, log, canListen }: AgentCon
 
   const submit = (e: FormEvent) => {
     e.preventDefault()
-    if (sendText(draft)) setDraft('')
+    if (canSend(agent, draft) && sendText(draft)) setDraft('')
   }
 
   return (
@@ -62,7 +66,7 @@ export function AgentConsoleView({ agent, transcript, log, canListen }: AgentCon
           maxLength={2000}
           onChange={(e) => setDraft(e.target.value)}
         />
-        <button type="submit" className="btn" disabled={!online || !draft.trim()}>
+        <button type="submit" className="btn" disabled={!canSend(agent, draft)}>
           Send
         </button>
         <button
@@ -80,7 +84,7 @@ export function AgentConsoleView({ agent, transcript, log, canListen }: AgentCon
         <input
           type="checkbox"
           checked={agent.speakReplies}
-          onChange={(e) => viewerStore.getState().setAgent({ speakReplies: e.target.checked })}
+          onChange={(e) => setSpeakReplies(viewerStore, e.target.checked)}
         />
         Speak replies
       </label>
