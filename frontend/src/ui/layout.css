@@ -454,3 +454,29 @@ hr {
     max-height: 320px;
   }
 }
+
+.shortcuts {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.shortcuts dt {
+  display: flex;
+  gap: 4px;
+}
+.shortcuts dd {
+  margin: 0;
+  text-align: right;
+}
+kbd {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  min-width: 22px;
+  padding: 1px 6px;
+  text-align: center;
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: var(--panel2);
+}

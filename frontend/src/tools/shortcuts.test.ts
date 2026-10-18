@@ -1,0 +1,100 @@
+import { beforeEach, describe, expect, it } from 'vitest'
+import { createViewerStore, type ViewerStore } from '../state/store'
+import { fsFetch } from '../test/fixtures'
+import { runTools } from '../ui/controls'
+import { SHORTCUTS, normalizeKey, shortcutToCall } from './shortcuts'
+
+let store: ViewerStore
+
+const call = (key: string) => shortcutToCall(key, store.getState())
+
+async function press(key: string) {
+  const req = call(key)
+  if (!req) throw new Error(`no shortcut for ${key}`)
+  const [r] = await runTools(store, [req], 'keyboard')
+  if (!r.ok) throw new Error(r.error)
+}
+
+beforeEach(async () => {
+  store = createViewerStore({ fetchFn: fsFetch() })
+  await store.getState().loadIndex()
+  const r = await store.getState().loadCase('synth_001')
+  if (!r.ok) throw new Error(r.error)
+})
+
+describe('shortcutToCall', () => {
+  it('jumps to the slice through the marker on each axis', () => {
+    expect(call('1')).toEqual({ name: 'inspect_mri_slice', args: { axis: 'axial', index: 25 } })
+    expect(call('2')).toEqual({ name: 'inspect_mri_slice', args: { axis: 'coronal', index: 38 } })
+    expect(call('3')).toEqual({ name: 'inspect_mri_slice', args: { axis: 'sagittal', index: 19 } })
+  })
+
+  it('steps slices with the arrow keys', async () => {
+    expect(call('ArrowUp')).toEqual({ name: 'inspect_mri_slice', args: { axis: 'axial', index: 26 } })
+    expect(call('ArrowDown')).toEqual({ name: 'inspect_mri_slice', args: { axis: 'axial', index: 24 } })
+    await press('ArrowUp')
+    expect(store.getState().slice).toEqual({ axis: 'axial', index: 26 })
+  })
+
+  it('steps brain opacity by 0.1', () => {
+    expect(call(']')).toEqual({ name: 'set_opacity', args: { asset_id: 'brain_surface', value: 0.55 } })
+    expect(call('[')).toEqual({ name: 'set_opacity', args: { asset_id: 'brain_surface', value: 0.35 } })
+  })
+
+  it('cycles the cutaway plane through the tumour centroid', async () => {
+    expect(call('c')).toEqual({ name: 'set_cutaway', args: { plane: 'axial', ras_mm: 3 } })
+    await press('c')
+    expect(call('c')).toEqual({ name: 'set_cutaway', args: { plane: 'coronal', ras_mm: 18 } })
+    await press('c')
+    await press('c')
+    expect(store.getState().cutaway.plane).toBe('sagittal')
+    expect(call('c')).toEqual({ name: 'set_cutaway', args: { plane: 'none' } })
+  })
+
+  it('cycles hemisphere hiding', async () => {
+    const seen: string[] = []
+    for (let i = 0; i < 3; i++) {
+      await press('h')
+      seen.push(store.getState().hemisphere)
+    }
+    expect(seen).toEqual(['left', 'right', 'none'])
+  })
+
+  it('focuses the selection, else the first tumour', () => {
+    expect(call('f')).toEqual({ name: 'focus_region', args: { asset_id: 'tumor_et' } })
+    store.getState().select('tumor_ncr')
+    expect(call('f')).toEqual({ name: 'focus_region', args: { asset_id: 'tumor_ncr' } })
+  })
+
+  it('toggles the brain and the tumours', async () => {
+    expect(call('b')).toEqual({ name: 'toggle_visibility', args: { asset_ids: ['brain_surface'], visible: false } })
+    expect(call('t')).toEqual({
+      name: 'toggle_visibility',
+      args: { asset_ids: ['tumor_et', 'tumor_ncr', 'tumor_ed'], visible: false },
+    })
+    await press('t')
+    expect(call('t')).toEqual({
+      name: 'toggle_visibility',
+      args: { asset_ids: ['tumor_et', 'tumor_ncr', 'tumor_ed'], visible: true },
+    })
+  })
+
+  it('has no next case when the index holds one case', () => {
+    expect(call('n')).toBeNull()
+  })
+
+  it('ignores unmapped keys and case keys before a case loads', async () => {
+    expect(call('x')).toBeNull()
+    const empty = createViewerStore({ fetchFn: fsFetch() })
+    expect(shortcutToCall('1', empty.getState())).toBeNull()
+  })
+
+  it('covers every browser tool in the legend', () => {
+    const tools = new Set(SHORTCUTS.map((s) => s.tool).filter(Boolean))
+    expect([...tools].sort()).toEqual(
+      ['focus_region', 'hide_hemisphere', 'inspect_mri_slice', 'load_case', 'set_cutaway', 'set_opacity', 'toggle_visibility'],
+    )
+    expect(normalizeKey('C')).toBe('c')
+    expect(normalizeKey('ArrowUp')).toBe('ArrowUp')
+  })
+})
