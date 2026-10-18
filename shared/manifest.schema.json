@@ -1,0 +1,289 @@
+{
+  "$defs": {
+    "Metrics": {
+      "additionalProperties": false,
+      "properties": {
+        "dice_vs_gt": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "type": "number"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dice Vs Gt"
+        }
+      },
+      "title": "Metrics",
+      "type": "object"
+    },
+    "SurfaceAsset": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "const": "brain_surface",
+          "title": "Id",
+          "type": "string"
+        },
+        "node": {
+          "title": "Node",
+          "type": "string"
+        },
+        "kind": {
+          "const": "surface",
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "node",
+        "kind"
+      ],
+      "title": "SurfaceAsset",
+      "type": "object"
+    },
+    "TumorAsset": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "enum": [
+            "tumor_et",
+            "tumor_ncr",
+            "tumor_ed"
+          ],
+          "title": "Id",
+          "type": "string"
+        },
+        "label": {
+          "enum": [
+            1,
+            2,
+            3
+          ],
+          "title": "Label",
+          "type": "integer"
+        },
+        "node": {
+          "title": "Node",
+          "type": "string"
+        },
+        "kind": {
+          "const": "tumor",
+          "title": "Kind",
+          "type": "string"
+        },
+        "color": {
+          "pattern": "^#[0-9A-Fa-f]{6}$",
+          "title": "Color",
+          "type": "string"
+        },
+        "volume_ml": {
+          "minimum": 0,
+          "title": "Volume Ml",
+          "type": "number"
+        },
+        "centroid_ras": {
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Centroid Ras",
+          "type": "array"
+        },
+        "bbox_ras": {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "maxItems": 3,
+              "minItems": 3,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "maxItems": 3,
+              "minItems": 3,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            }
+          ],
+          "title": "Bbox Ras",
+          "type": "array"
+        },
+        "min_dist_surface_mm": {
+          "minimum": 0,
+          "title": "Min Dist Surface Mm",
+          "type": "number"
+        }
+      },
+      "required": [
+        "id",
+        "label",
+        "node",
+        "kind",
+        "color",
+        "volume_ml",
+        "centroid_ras",
+        "bbox_ras",
+        "min_dist_surface_mm"
+      ],
+      "title": "TumorAsset",
+      "type": "object"
+    },
+    "Volumes": {
+      "additionalProperties": false,
+      "properties": {
+        "flair": {
+          "title": "Flair",
+          "type": "string"
+        },
+        "mask": {
+          "title": "Mask",
+          "type": "string"
+        }
+      },
+      "required": [
+        "flair",
+        "mask"
+      ],
+      "title": "Volumes",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "case_id": {
+      "pattern": "^[a-z0-9_]+$",
+      "title": "Case Id",
+      "type": "string"
+    },
+    "provenance": {
+      "enum": [
+        "ground-truth",
+        "monai-segresnet",
+        "synthetic"
+      ],
+      "title": "Provenance",
+      "type": "string"
+    },
+    "dims": {
+      "maxItems": 3,
+      "minItems": 3,
+      "prefixItems": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "integer"
+        },
+        {
+          "type": "integer"
+        }
+      ],
+      "title": "Dims",
+      "type": "array"
+    },
+    "vox2ras": {
+      "items": {
+        "type": "number"
+      },
+      "maxItems": 16,
+      "minItems": 16,
+      "title": "Vox2Ras",
+      "type": "array"
+    },
+    "ras2gl": {
+      "items": {
+        "type": "number"
+      },
+      "maxItems": 16,
+      "minItems": 16,
+      "title": "Ras2Gl",
+      "type": "array"
+    },
+    "midline_x_ras": {
+      "title": "Midline X Ras",
+      "type": "number"
+    },
+    "volumes": {
+      "$ref": "#/$defs/Volumes"
+    },
+    "glb": {
+      "title": "Glb",
+      "type": "string"
+    },
+    "assets": {
+      "items": {
+        "discriminator": {
+          "mapping": {
+            "surface": "#/$defs/SurfaceAsset",
+            "tumor": "#/$defs/TumorAsset"
+          },
+          "propertyName": "kind"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/$defs/SurfaceAsset"
+          },
+          {
+            "$ref": "#/$defs/TumorAsset"
+          }
+        ]
+      },
+      "title": "Assets",
+      "type": "array"
+    },
+    "metrics": {
+      "$ref": "#/$defs/Metrics"
+    }
+  },
+  "required": [
+    "case_id",
+    "provenance",
+    "dims",
+    "vox2ras",
+    "ras2gl",
+    "midline_x_ras",
+    "volumes",
+    "glb",
+    "assets",
+    "metrics"
+  ],
+  "title": "Manifest",
+  "type": "object"
+}
