@@ -136,6 +136,19 @@ describe('pinch tap and drag', () => {
     expect(r.of('drag')).toHaveLength(0)
   })
 
+  it('counts the movement on the release frame: a jump while letting go is not a tap', () => {
+    const r = run([oneHand({ x: 0.5, pinch: 1 }), ...times(2, oneHand({ x: 0.5, pinch: 0.1 })), oneHand({ x: 0.7, pinch: 1 })], initialGestureState(), sharp)
+    expect(r.of('pinchEnd')[0].tap).toBe(false)
+  })
+
+  it('adds up sub-deadzone motion: slow creep past the tap travel is not a tap', () => {
+    const step = (GESTURE_CONFIG.dragDeadzone * 0.95) / 2 // image width; NDC is twice that
+    const creep = Array.from({ length: 20 }, (_, i) => oneHand({ x: 0.5 + i * step, pinch: 0.1 }))
+    const r = run([oneHand({ x: 0.5, pinch: 1 }), ...creep, oneHand({ x: 0.5 + 20 * step, pinch: 1 })], initialGestureState(), sharp, 5)
+    expect(r.of('drag')).toHaveLength(0)
+    expect(r.of('pinchEnd')[0].tap).toBe(false)
+  })
+
   it('does not drag on the frame the pinch starts', () => {
     const r = run([oneHand({ x: 0.3, pinch: 1 }), oneHand({ x: 0.7, pinch: 0.1 })], initialGestureState(), sharp)
     expect(r.of('pinchStart')).toHaveLength(1)
@@ -162,6 +175,11 @@ describe('open hand explode', () => {
     const amounts = r.of('explode').map((e) => e.amount)
     expect(amounts.at(-1)).toBeCloseTo(0.75, 1)
     expect(new Set(amounts.map((a) => a.toFixed(3))).size).toBe(amounts.length)
+  })
+
+  it('re-asserts the amount each time an open pose is newly confirmed, even at the same openness', () => {
+    const r = run([...open(1.5), ...times(3, oneHand({ pose: 'point' })), ...open(1.5)])
+    expect(r.of('explode')).toHaveLength(2)
   })
 
   it('holds the amount when the hand switches to a point', () => {

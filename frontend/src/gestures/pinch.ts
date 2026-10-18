@@ -142,6 +142,10 @@ export function stepGesture(
   let pinchAt = prev.pinchAt
   let travel = prev.travel
   const pinchEvents: GestureEvent[] = []
+  // Every frame of a held pinch counts toward travel, drag event or not, including the release frame.
+  const dx = prev.pinched && prev.pointer ? pointer[0] - prev.pointer[0] : 0
+  const dy = prev.pinched && prev.pointer ? pointer[1] - prev.pointer[1] : 0
+  const moved = Math.hypot(dx, dy)
   if (!pinched && armed && ratio < cfg.pinchOn) {
     pinched = true
     armed = false
@@ -150,15 +154,11 @@ export function stepGesture(
     pinchEvents.push({ type: 'pinchStart', ndc: pointer })
   } else if (pinched && ratio > cfg.pinchOff) {
     pinched = false
+    travel += moved
     pinchEvents.push({ type: 'pinchEnd', ndc: pointer, tap: now - pinchAt <= cfg.tapMaxMs && travel <= cfg.tapMaxTravel })
-  } else if (pinched && prev.pinched && prev.pointer) {
-    const dx = pointer[0] - prev.pointer[0]
-    const dy = pointer[1] - prev.pointer[1]
-    const moved = Math.hypot(dx, dy)
-    if (moved > cfg.dragDeadzone) {
-      pinchEvents.push({ type: 'drag', dx, dy })
-      travel += moved
-    }
+  } else if (pinched) {
+    travel += moved
+    if (moved > cfg.dragDeadzone) pinchEvents.push({ type: 'drag', dx, dy })
   }
   const pose = classifyPose(h, pinched, cfg)
   events.push({ type: 'hover', ndc: pointer, pose }, ...pinchEvents)
@@ -171,7 +171,8 @@ export function stepGesture(
     smoothed = ema(prev.pose === 'open' ? prev.openness : null, openness(h), cfg.alpha)
     if (frames >= cfg.poseFrames) {
       const amount = clamp01((smoothed - cfg.openMin) / (cfg.openMax - cfg.openMin))
-      if (lastExplode === null || Math.abs(amount - lastExplode) > cfg.explodeDeadzone) {
+      // The 3rd open frame always emits, so a value changed meanwhile (keyboard, agent) is overridden.
+      if (frames === cfg.poseFrames || lastExplode === null || Math.abs(amount - lastExplode) > cfg.explodeDeadzone) {
         events.push({ type: 'explode', amount })
         lastExplode = amount
       }
