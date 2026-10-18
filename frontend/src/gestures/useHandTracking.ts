@@ -1,129 +1,49 @@
 import { FilesetResolver, HandLandmarker } from '@mediapipe/tasks-vision'
-import { useEffect, useRef } from 'react'
+import { useEffect } from 'react'
 import { useViewer, viewerStore } from '../state/store'
-import { gestureBus } from './bus'
-import { type GestureState, initialGestureState, stepGesture } from './pinch'
-import { setWebcamFeed } from './webcamStream'
+import { type HandSessionEnv, type Landmarker, startHandSession } from './handSession'
 
 export const MEDIAPIPE_WASM = '/mediapipe/wasm'
 export const HAND_MODEL = '/mediapipe/hand_landmarker.task'
 
-const messageOf = (e: unknown) => (e instanceof Error ? e.message : String(e))
+async function createLandmarker(): Promise<Landmarker> {
+  const fileset = await FilesetResolver.forVisionTasks(MEDIAPIPE_WASM)
+  const options = (delegate: 'GPU' | 'CPU') =>
+    ({ baseOptions: { modelAssetPath: HAND_MODEL, delegate }, runningMode: 'VIDEO', numHands: 2 }) as const
+  try {
+    return await HandLandmarker.createFromOptions(fileset, options('GPU'))
+  } catch {
+    return await HandLandmarker.createFromOptions(fileset, options('CPU'))
+  }
+}
+
+function browserEnv(): HandSessionEnv {
+  return {
+    getUserMedia: navigator.mediaDevices?.getUserMedia
+      ? (c) => navigator.mediaDevices.getUserMedia(c)
+      : null,
+    createVideo() {
+      const video = document.createElement('video')
+      video.muted = true
+      video.playsInline = true
+      return video
+    },
+    createLandmarker,
+    requestFrame: (cb) => requestAnimationFrame(cb),
+    cancelFrame: (id) => cancelAnimationFrame(id),
+    now: () => performance.now(),
+  }
+}
 
 /** Webcam + MediaPipe loop, active only while gesture mode is on. */
 export function useHandTracking(): void {
   const gesturesOn = useViewer((s) => s.gesturesOn)
-  // Spec §6 fix 1: per-frame gesture state lives in a ref, never in React state.
-  const gesture = useRef<GestureState>(initialGestureState())
 
   useEffect(() => {
-    const { setWebcam } = viewerStore.getState()
     if (!gesturesOn) {
-      setWebcam({ status: 'off', hands: 0, error: null })
+      viewerStore.getState().setWebcam({ status: 'off', hands: 0, error: null })
       return
     }
-
-    let cancelled = false
-    let stream: MediaStream | null = null
-    let landmarker: HandLandmarker | null = null
-    let raf = 0
-    let onVideoEnded: (() => void) | null = null
-    const video = document.createElement('video')
-    video.muted = true
-    video.playsInline = true
-
-    const stop = () => {
-      cancelAnimationFrame(raf)
-      if (onVideoEnded) stream?.getVideoTracks()[0]?.removeEventListener('ended', onVideoEnded)
-      stream?.getTracks().forEach((t) => t.stop())
-      landmarker?.close()
-      video.srcObject = null
-      setWebcamFeed(null)
-      gesture.current = initialGestureState()
-      gestureBus.emit({ type: 'lost' })
-    }
-
-    async function start() {
-      setWebcam({ status: 'starting', hands: 0, error: null })
-      if (!navigator.mediaDevices?.getUserMedia) {
-        setWebcam({ status: 'unavailable', error: 'this browser has no camera API' })
-        return
-      }
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: { width: 640, height: 480, facingMode: 'user' },
-          audio: false,
-        })
-      } catch (e) {
-        const denied = e instanceof DOMException && (e.name === 'NotAllowedError' || e.name === 'SecurityError')
-        if (!cancelled) setWebcam({ status: denied ? 'denied' : 'unavailable', error: denied ? null : messageOf(e) })
-        return
-      }
-      if (cancelled) return stop()
-      try {
-        video.srcObject = stream
-        await video.play()
-        if (!cancelled) setWebcamFeed({ stream, width: video.videoWidth, height: video.videoHeight })
-        const fileset = await FilesetResolver.forVisionTasks(MEDIAPIPE_WASM)
-        try {
-          landmarker = await HandLandmarker.createFromOptions(fileset, {
-            baseOptions: { modelAssetPath: HAND_MODEL, delegate: 'GPU' },
-            runningMode: 'VIDEO',
-            numHands: 2,
-          })
-        } catch {
-          landmarker = await HandLandmarker.createFromOptions(fileset, {
-            baseOptions: { modelAssetPath: HAND_MODEL, delegate: 'CPU' },
-            runningMode: 'VIDEO',
-            numHands: 2,
-          })
-        }
-      } catch (e) {
-        if (!cancelled) setWebcam({ status: 'unavailable', error: `hand tracking failed to start: ${messageOf(e)}` })
-        return stop()
-      }
-      if (cancelled) return stop()
-      setWebcam({ status: 'on', hands: 0, error: null })
-      onVideoEnded = () => {
-        if (cancelled) return
-        setWebcam({ status: 'unavailable', hands: 0, error: 'camera stopped' })
-        setWebcamFeed(null)
-        gestureBus.emit({ type: 'lost' })
-        cancelAnimationFrame(raf)
-      }
-      stream.getVideoTracks()[0]?.addEventListener('ended', onVideoEnded)
-
-      let lastVideoTime = -1
-      const tick = () => {
-        if (cancelled || !landmarker) return
-        if (video.currentTime !== lastVideoTime) {
-          lastVideoTime = video.currentTime
-          let result: ReturnType<HandLandmarker['detectForVideo']>
-          try {
-            result = landmarker.detectForVideo(video, performance.now())
-          } catch (e) {
-            if (!cancelled) {
-              setWebcam({ status: 'unavailable', hands: 0, error: `hand tracking stopped: ${messageOf(e)}` })
-              setWebcamFeed(null)
-              gestureBus.emit({ type: 'lost' })
-            }
-            return
-          }
-          const { state, events } = stepGesture(gesture.current, result.landmarks)
-          const handsChanged = state.hands !== gesture.current.hands
-          gesture.current = state
-          for (const e of events) gestureBus.emit(e)
-          if (handsChanged) setWebcam({ hands: state.hands })
-        }
-        raf = requestAnimationFrame(tick)
-      }
-      raf = requestAnimationFrame(tick)
-    }
-
-    void start()
-    return () => {
-      cancelled = true
-      stop()
-    }
+    return startHandSession(viewerStore, browserEnv())
   }, [gesturesOn])
 }

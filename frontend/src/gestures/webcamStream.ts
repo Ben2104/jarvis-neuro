@@ -21,6 +21,11 @@ export function setWebcamFeed(next: WebcamFeed | null): void {
   for (const fn of listeners) fn()
 }
 
+/** Clear the feed only if it is still `stream`'s, so a stale session cannot drop a newer one's. */
+export function clearWebcamFeed(stream: MediaStream): void {
+  if (feed.stream === stream) setWebcamFeed(null)
+}
+
 export function subscribeWebcamFeed(fn: () => void): () => void {
   listeners.add(fn)
   return () => {
