@@ -3,6 +3,7 @@ import { type ComponentRef, useEffect, useRef } from 'react'
 import { Vector3 } from 'three'
 import { gestureBus } from '../gestures/bus'
 import { useViewer } from '../state/store'
+import { applyZoom } from './gestureEvents'
 import { assetBox } from './focus'
 import { prepareCase } from './prepare'
 
@@ -25,7 +26,7 @@ export function CameraRig() {
       gestureBus.on((e) => {
         const controls = ref.current
         if (!controls) return
-        if (e.type === 'zoom') void controls.dollyTo(controls.distance / e.scale, false)
+        applyZoom(e, controls)
       }),
     [],
   )
