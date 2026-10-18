@@ -76,10 +76,18 @@ describe('fetchCase', () => {
 
   it('accepts off-diagonal noise within the spacing-scaled tolerance', async () => {
     const m = readSynthManifestJson()
-    m.vox2ras[1] = 3e-6
-    m.vox2ras[4] = -3e-6
+    const tol = 1e-6 * Math.max(m.vox2ras[0], m.vox2ras[5], m.vox2ras[10])
+    m.vox2ras[1] = 0.5 * tol
+    m.vox2ras[4] = -0.5 * tol
     const c = await fetchCase(synthEntry, { fetchFn: fsFetch({ [`${BASE}manifest.json`]: json(m) }) })
     expect(c.manifest.vox2ras).toEqual(m.vox2ras)
+  })
+
+  it('rejects off-diagonal noise above the spacing-scaled tolerance', async () => {
+    const m = readSynthManifestJson()
+    const tol = 1e-6 * Math.max(m.vox2ras[0], m.vox2ras[5], m.vox2ras[10])
+    m.vox2ras[1] = 2 * tol
+    expect(await loadError({ [`${BASE}manifest.json`]: json(m) })).toMatch(/RAS-canonical/)
   })
 
   it('reports a truncated volume with the gzip hint', async () => {
