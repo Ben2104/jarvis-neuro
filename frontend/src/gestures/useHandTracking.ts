@@ -60,11 +60,19 @@ export function useHandTracking(): void {
         video.srcObject = stream
         await video.play()
         const fileset = await FilesetResolver.forVisionTasks(MEDIAPIPE_WASM)
-        landmarker = await HandLandmarker.createFromOptions(fileset, {
-          baseOptions: { modelAssetPath: HAND_MODEL, delegate: 'GPU' },
-          runningMode: 'VIDEO',
-          numHands: 2,
-        })
+        try {
+          landmarker = await HandLandmarker.createFromOptions(fileset, {
+            baseOptions: { modelAssetPath: HAND_MODEL, delegate: 'GPU' },
+            runningMode: 'VIDEO',
+            numHands: 2,
+          })
+        } catch {
+          landmarker = await HandLandmarker.createFromOptions(fileset, {
+            baseOptions: { modelAssetPath: HAND_MODEL, delegate: 'CPU' },
+            runningMode: 'VIDEO',
+            numHands: 2,
+          })
+        }
       } catch (e) {
         if (!cancelled) setWebcam({ status: 'unavailable', error: `hand tracking failed to start: ${messageOf(e)}` })
         return stop()
