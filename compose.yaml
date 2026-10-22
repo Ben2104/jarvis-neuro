@@ -1,0 +1,40 @@
+# Full stack: SegResNet (:8001) + agent server serving the built viewer (:8080).
+# Dev: `docker compose up --build segresnet` and run vite + uvicorn natively.
+services:
+  segresnet:
+    build: ./backend/segresnet_api
+    ports:
+      - "8001:8000"
+    environment:
+      ALLOWED_ORIGINS: http://localhost:5173
+    volumes:
+      - ./backend/segresnet_api/weights:/app/weights:ro
+      - segresnet-jobs:/app/jobs
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      start_period: 60s
+      retries: 12
+
+  app:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    ports:
+      - "8080:8000"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      SEGRESNET_URL: http://segresnet:8000
+      AGENT_ALLOWED_ORIGINS: http://localhost:8080,http://127.0.0.1:8080
+    volumes:
+      - cases:/app/frontend/dist/cases
+    depends_on:
+      segresnet:
+        condition: service_healthy
+
+volumes:
+  segresnet-jobs:
+  cases:
