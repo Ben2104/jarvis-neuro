@@ -1,0 +1,4 @@
+# Not in git: no LFS policy here. Copy from brain3d branch Tomlocal (SegResNet_api/).
+weights/
+jobs/
+brats_mri_segmentation/models/
