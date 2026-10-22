@@ -22,6 +22,12 @@ export const fmtMm = (v: number | null | undefined) => (missing(v) ? DASH : `${v
 export const fmtDice = (v: number | null | undefined) => (missing(v) ? DASH : v.toFixed(2))
 export const fmtVec = (v: Vec3 | null | undefined) => (missing(v) ? DASH : `(${v.map((x) => x.toFixed(1)).join(', ')})`)
 
+export function fmtBytes(n: number): string {
+  if (n < 1024) return `${n} B`
+  if (n < 1024 ** 2) return `${(n / 1024).toFixed(1)} KB`
+  return `${(n / 1024 ** 2).toFixed(1)} MB`
+}
+
 /** Sum of the manifest sub-region volumes; shown labelled as a sum. */
 export function totalVolumeMl(tumors: TumorAsset[]): number | null {
   return tumors.length ? tumors.reduce((acc, t) => acc + t.volume_ml, 0) : null

@@ -1,6 +1,7 @@
+import { renderToStaticMarkup } from 'react-dom/server'
 import { expect, it } from 'vitest'
 import type { Study } from '../lib/studies'
-import { rowsFor } from './ProcessingScreen'
+import { FileCard, rowsFor } from './ProcessingScreen'
 
 const base: Study = {
   study_id: 'a1b2c3d4e5f6',
@@ -42,4 +43,24 @@ it('shows the error on the failed row', () => {
 
 it('shows every row pending before the first poll', () => {
   expect(rowsFor(null).map((r) => r.state)).toEqual(['pending', 'pending', 'pending', 'pending'])
+})
+
+it('lists the uploaded files by name, slot and size', () => {
+  const html = renderToStaticMarkup(
+    <FileCard
+      files={[
+        { slot: 't1c', name: 'sub01_t1ce.nii.gz', size: 50_540_000 },
+        { slot: 'flair', name: 'sub01_flair.nii', size: 2048 },
+      ]}
+    />,
+  )
+  expect(html).toContain('sub01_t1ce.nii.gz')
+  expect(html).toContain('T1 contrast (T1c)')
+  expect(html).toContain('48.2 MB')
+  expect(html).toContain('2.0 KB')
+  expect(html).toContain('Uploaded')
+})
+
+it('renders no file card without uploaded files', () => {
+  expect(renderToStaticMarkup(<FileCard files={[]} />)).toBe('')
 })

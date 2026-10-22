@@ -61,3 +61,10 @@ it('lists the live agents and greys the placeholders', () => {
   expect(html.match(/class="chip placeholder"/g)).toHaveLength(2)
   expect(html).toContain('title="Placeholder — not in this build"')
 })
+
+it('titles the panel and labels the agent chips as in the Figma frame', () => {
+  const html = render(agent())
+  expect(html).toContain('Neuro Agent')
+  expect(html).toContain('Agents on this case')
+  expect(html.match(/<i class="dot ok"><\/i>Orchestrator/g)).toHaveLength(1)
+})

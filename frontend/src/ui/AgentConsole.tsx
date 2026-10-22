@@ -48,6 +48,17 @@ export function AgentConsoleView({ agent, transcript, log, canListen }: AgentCon
 
   return (
     <section className="panel console" aria-label="Agent console">
+      <div className="ph agent-head">
+        <span className="agent-title">
+          Neuro Agent
+          <small className="muted">Voice &amp; text control for the workspace</small>
+        </span>
+        <span className="chip" title={agent.detail ?? undefined}>
+          <i className={online ? 'dot ok' : agent.link === 'unavailable' ? 'dot bad' : 'dot'} />
+          {LINK_TEXT[agent.link]}
+        </span>
+      </div>
+      <p className="agent-label">Agents on this case</p>
       <ul className="agent-chips" aria-label="Agents">
         {AGENT_CHIPS.map((a) => (
           <li
@@ -55,17 +66,11 @@ export function AgentConsoleView({ agent, transcript, log, canListen }: AgentCon
             className={a.live ? 'chip' : 'chip placeholder'}
             title={a.live ? undefined : 'Placeholder — not in this build'}
           >
+            {a.live && <i className="dot ok" />}
             {a.name}
           </li>
         ))}
       </ul>
-      <div className="ph">
-        <span>Jarvis · Orchestrator</span>
-        <span className="chip" title={agent.detail ?? undefined}>
-          <i className={online ? 'dot ok' : agent.link === 'unavailable' ? 'dot bad' : 'dot'} />
-          {LINK_TEXT[agent.link]}
-        </span>
-      </div>
       <ol className="transcript" aria-live="polite" aria-label="Conversation">
         {transcript.map((t) => (
           <li key={t.id} className={`turn ${t.role}`}>
