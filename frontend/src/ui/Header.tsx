@@ -14,14 +14,22 @@ export function Header() {
   return (
     <header className="app-header">
       <div className="brand">
-        <svg width="26" height="26" viewBox="0 0 26 26" fill="none" stroke="var(--accent)" strokeWidth="1.6" aria-hidden="true">
-          <circle cx="13" cy="13" r="10" />
-          <circle cx="13" cy="13" r="4" />
-          <path d="M13 1v5M13 20v5M1 13h5M20 13h5" />
-        </svg>
-        <span>Jarvis-Neuro</span>
-        <span className="chip">Anatomy viewer</span>
+        <span className="brand-mark">
+          <svg width="16" height="16" viewBox="0 0 26 26" fill="none" stroke="#fff" strokeWidth="2" aria-hidden="true">
+            <circle cx="13" cy="13" r="10" />
+            <circle cx="13" cy="13" r="4" />
+          </svg>
+        </span>
+        <span className="brand-name">NeuroVision</span>
+        <span className="chip">v2.4 Core</span>
       </div>
+      <nav className="nav" aria-label="Sections">
+        <button className="nav-tab">Upload</button>
+        <button className="nav-tab" disabled title="Not in this build">Explore</button>
+        <button className="nav-tab" aria-current="page">MRI Workspace</button>
+        <button className="nav-tab" disabled title="Not in this build">Learning Mode</button>
+        <button className="nav-tab" disabled title="Not in this build">Help</button>
+      </nav>
       <div className="header-right">
         {loading && <span className="chip">Loading case…</span>}
         <span className="chip">
