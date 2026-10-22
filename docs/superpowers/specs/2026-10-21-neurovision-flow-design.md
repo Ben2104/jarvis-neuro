@@ -34,8 +34,8 @@ Agent server :8000  (jarvis_neuro.agent)
    step volume   stack to 4D in MSD order [FLAIR, T1, T1gd, T2] -> LoadedCase; report dims + spacing
    step segment  POST the four files to SEGRESNET_URL/jobs, poll GET /jobs/{id} every 2 s
    step measure  GET /jobs/{id}/seg.nii.gz, remap labels, bake_case(..., provenance="monai-segresnet",
-                 draco=False) into CASES_DIR/<study_id>/monai-segresnet/, update_index()
-   done          {case_id: <study_id>}
+                 draco=False) into CASES_DIR/study_<study_id>/monai-segresnet/, update_index()
+   done          {case_id: study_<study_id>}
         │
 SegResNet :8001  (backend/segresnet_api, unchanged)
 ```
@@ -79,7 +79,7 @@ missing field, wrong extension, unreadable NIfTI, or shape/affine mismatch; `413
 ```
 
 `status` ∈ `queued | running | done | failed`. `step` ∈ `read | volume | segment | measure`. Each step's `state` ∈
-`pending | running | done | failed`. On `done`, `case_id` equals `study_id`. On `failed`, `error` is one line and the
+`pending | running | done | failed`. On `done`, `case_id` is `study_<study_id>` (manifest ids must match `^[a-z0-9_]+$`; the prefix keeps study cases gitignorable). On `failed`, `error` is one line and the
 failed step has `state: "failed"`.
 
 The study table is in memory. `shortcut: lost on restart, upgrade to disk if the server runs more than one process.`
@@ -115,9 +115,9 @@ The header's "MRI Workspace" tab returns to `workspace` once a case is loaded.
 Case-insensitive, on the basename. Checked in this order so `t1` never takes a contrast file:
 
 1. `t1c`: `t1c`, `t1ce`, `t1gd`, `t1_gd`, `t1-gd`, `t1post`
-2. `flair`: `flair`
-3. `t2`: `t2` (and not `flair`)
-4. `t1`: `t1` not followed by `c`, `ce`, `gd`, `_gd`, `-gd`, `post`
+2. `flair`: `flair`, `t2f` (BraTS 2023)
+3. `t2`: `t2` (and not `flair` / `t2f`; covers BraTS 2023 `t2w`)
+4. `t1`: `t1` not followed by `c`, `ce`, `gd`, `_gd`, `-gd`, `post` (covers BraTS 2023 `t1n`)
 
 A file matching no slot, or two files for one slot, leaves the slot for manual choice.
 
