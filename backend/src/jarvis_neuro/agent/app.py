@@ -1,4 +1,4 @@
-"""FastAPI app: the agent WebSocket at /ws, a health check, and the built viewer (spec decision 7).
+"""FastAPI app: the agent WebSocket at /ws, the study upload API, a health check, and the built viewer (spec decision 7).
 
 Run: uv run uvicorn jarvis_neuro.agent.app:app --port 8000
 """
@@ -8,7 +8,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
@@ -20,6 +20,7 @@ from .config import AgentSettings, ConfigError, allowed_origins, build_model, lo
 from .orchestrator import OrchestratorSession
 from .protocol import CLIENT_MESSAGE, CaseMessage, ToolResultMessage, UserMessage
 from .reasoner import make_explainer
+from .studies import SegResNetClient, StudyRunner, UploadTooLarge, segresnet_url
 from .tools import SceneContext
 
 log = logging.getLogger(__name__)
@@ -53,11 +54,13 @@ def create_app(
     settings_loader: Callable[[], AgentSettings] = load_settings,
     model_builder: ModelBuilder = build_model,
     repo: CaseRepo | None = None,
+    studies: StudyRunner | None = None,
     static_dir: Path | None = DEFAULT_STATIC_DIR,
 ) -> FastAPI:
     app = FastAPI(title="Jarvis-Neuro agent")
     app.add_middleware(GZipMiddleware, minimum_size=1024)
     cases = repo or CaseRepo()
+    runner = studies or StudyRunner(SegResNetClient(segresnet_url()))
 
     def agent_state() -> tuple[AgentSettings | None, str | None]:
         try:
@@ -69,6 +72,29 @@ def create_app(
     def health() -> dict[str, Any]:
         settings, problem = agent_state()
         return {"ok": True, "agent": "ready" if settings else "unavailable", "detail": problem}
+
+    @app.post("/api/studies", status_code=202)
+    def create_study(
+        t1c: UploadFile | None = None,
+        t1: UploadFile | None = None,
+        t2: UploadFile | None = None,
+        flair: UploadFile | None = None,
+    ) -> dict[str, str]:
+        given = {"t1c": t1c, "t1": t1, "t2": t2, "flair": flair}
+        uploads = {name: (f.filename or "", f.file) if f else None for name, f in given.items()}
+        try:
+            return {"study_id": runner.submit(uploads)}
+        except UploadTooLarge as e:
+            raise HTTPException(413, str(e)) from e
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from e
+
+    @app.get("/api/studies/{study_id}")
+    def study_status(study_id: str) -> dict[str, Any]:
+        view = runner.get(study_id)
+        if view is None:
+            raise HTTPException(404, "unknown study")
+        return view
 
     @app.websocket("/ws")
     async def agent_socket(socket: WebSocket) -> None:
