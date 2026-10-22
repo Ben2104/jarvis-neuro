@@ -1,4 +1,4 @@
-import { useViewer } from '../state/store'
+import { useViewer, viewerStore } from '../state/store'
 import { webcamLabel, runUi } from './controls'
 import { PROVENANCE_LABEL } from './format'
 
@@ -8,6 +8,8 @@ export function Header() {
   const loading = useViewer((s) => s.loading)
   const webcam = useViewer((s) => s.webcam)
   const gesturesOn = useViewer((s) => s.gesturesOn)
+  const stage = useViewer((s) => s.stage)
+  const setStage = viewerStore.getState().setStage
   const cam = webcamLabel(webcam, gesturesOn)
   const value = current ? `${current.manifest.case_id}|${current.manifest.provenance}` : ''
 
@@ -24,11 +26,26 @@ export function Header() {
         <span className="chip">v2.4 Core</span>
       </div>
       <nav className="nav" aria-label="Sections">
-        <button className="nav-tab">Upload</button>
-        <button className="nav-tab" disabled title="Not in this build">Explore</button>
-        <button className="nav-tab" aria-current="page">MRI Workspace</button>
-        <button className="nav-tab" disabled title="Not in this build">Learning Mode</button>
-        <button className="nav-tab" disabled title="Not in this build">Help</button>
+        <button
+          className="nav-tab"
+          aria-current={stage === 'upload' || stage === 'processing' ? 'page' : undefined}
+          onClick={() => stage !== 'processing' && setStage('upload')}
+        >
+          Upload
+        </button>
+        <button
+          className="nav-tab"
+          aria-current={stage === 'workspace' || stage === 'explore3d' ? 'page' : undefined}
+          disabled={!current}
+          onClick={() => setStage('workspace')}
+        >
+          MRI Workspace
+        </button>
+        {['Explore', 'Learning Mode', 'Help'].map((t) => (
+          <button key={t} className="nav-tab" disabled title="Not in this build">
+            {t}
+          </button>
+        ))}
       </nav>
       <div className="header-right">
         {loading && <span className="chip">Loading case…</span>}
