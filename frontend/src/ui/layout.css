@@ -699,3 +699,6 @@ kbd {
 
 /* 3D screen */
 .structures { display: flex; align-items: center; gap: 16px; padding: 8px 14px; }
+.step.running .state-dot { border-top-color: transparent; animation: step-spin 0.9s linear infinite; }
+@keyframes step-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .step.running .state-dot { animation: none; border-top-color: var(--accent); } }

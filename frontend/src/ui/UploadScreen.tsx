@@ -41,7 +41,7 @@ export function UploadView({ slots, error, busy, onFiles, onSlot, onSubmit, onSa
           </label>
           <button className="btn" disabled title="Not in this build">Choose DICOM folder</button>
         </div>
-        <p className="muted small">Max 250 MB per study · T1-weighted contrast-enhanced recommended</p>
+        <p className="muted small">Max 250 MB per study · all four sequences required (T1c, T1, T2, FLAIR)</p>
       </section>
 
       <section className="slots" aria-label="Sequences">
