@@ -3,8 +3,10 @@ import { type StoreApi, createStore } from 'zustand/vanilla'
 import { type CaseFrame, rasToVoxel } from '../lib/affine'
 import { type CaseDeps, type LoadedCase, fetchCase, fetchIndex } from '../lib/loadCase'
 import { type CaseIndex, type Provenance, type Vec3, tumorAssets } from '../lib/manifest'
-import { type Axis, AXIS_DIM, sliceCount } from '../lib/volume'
+import { type Sequence, type Study, getStudy, postStudy } from '../lib/studies'
+import { AXES, type Axis, AXIS_DIM, sliceCount } from '../lib/volume'
 
+export type Stage = 'upload' | 'processing' | 'workspace' | 'explore3d'
 export type CutPlane = 'axial' | 'coronal' | 'sagittal' | 'none'
 export type Hemisphere = 'left' | 'right' | 'none'
 export type ToolSource = 'agent' | 'keyboard' | 'gesture' | 'ui'
@@ -53,6 +55,11 @@ export const TRANSCRIPT_CAP = 50
 export type LoadCaseResult = { ok: true; loaded: LoadedCase } | { ok: false; error: string }
 
 export interface ViewerState {
+  stage: Stage
+  studyId: string | null
+  study: Study | null
+  /** Upload rejection or lost contact with the study API, one line. */
+  studyError: string | null
   index: CaseIndex | null
   current: LoadedCase | null
   loading: boolean
@@ -61,7 +68,8 @@ export interface ViewerState {
   visible: Record<string, boolean>
   cutaway: { plane: CutPlane; rasMm: number }
   hemisphere: Hemisphere
-  slice: { axis: Axis; index: number }
+  slices: Record<Axis, number>
+  activeAxis: Axis
   marker: Vec3 | null
   selected: string | null
   hovered: string | null
@@ -77,6 +85,11 @@ export interface ViewerState {
 }
 
 export interface ViewerActions {
+  setStage(stage: Stage): void
+  uploadStudy(files: Record<Sequence, File>): Promise<void>
+  pollStudy(): Promise<void>
+  cancelStudy(): void
+  openCase(caseId: string, provenance?: Provenance): Promise<LoadCaseResult>
   loadIndex(): Promise<void>
   loadCase(caseId: string, provenance?: Provenance): Promise<LoadCaseResult>
   setOpacity(id: string, value: number): void
@@ -86,6 +99,8 @@ export interface ViewerActions {
   setExplode(value: number): void
   setSlice(axis: Axis, index: number): void
   setMarker(ras: Vec3 | null): void
+  /** Move the marker and put all three slices through it. */
+  focusPoint(ras: Vec3): void
   select(id: string | null): void
   hover(id: string | null): void
   requestFocus(assetId: string): void
@@ -108,28 +123,28 @@ export function sliceIndexThrough(frame: CaseFrame, axis: Axis, ras: Vec3): numb
   return clampIndex(Math.round(rasToVoxel(frame, ras)[AXIS_DIM[axis]]), sliceCount(frame.dims, axis))
 }
 
+export function slicesThrough(frame: CaseFrame, ras: Vec3 | null): Record<Axis, number> {
+  const at = (axis: Axis) => (ras ? sliceIndexThrough(frame, axis, ras) : Math.floor(sliceCount(frame.dims, axis) / 2))
+  return Object.fromEntries(AXES.map((axis) => [axis, at(axis)])) as Record<Axis, number>
+}
+
 type InitialView = Pick<
   ViewerState,
-  'opacity' | 'visible' | 'cutaway' | 'hemisphere' | 'explode' | 'slice' | 'marker' | 'selected' | 'hovered'
+  'opacity' | 'visible' | 'cutaway' | 'hemisphere' | 'explode' | 'slices' | 'activeAxis' | 'marker' | 'selected' | 'hovered'
 >
 
 export function initialViewFor(loaded: LoadedCase): InitialView {
   const ids = loaded.manifest.assets.map((a) => a.id)
   const first = tumorAssets(loaded.manifest)[0]
   const marker: Vec3 | null = first ? [...first.centroid_ras] : null
-  const axis: Axis = 'axial'
   return {
     opacity: Object.fromEntries(ids.map((id) => [id, DEFAULT_OPACITY[id] ?? 1])),
     visible: Object.fromEntries(ids.map((id) => [id, true])),
     cutaway: { plane: 'none', rasMm: 0 },
     hemisphere: 'none',
     explode: 0,
-    slice: {
-      axis,
-      index: marker
-        ? sliceIndexThrough(loaded.frame, axis, marker)
-        : Math.floor(sliceCount(loaded.frame.dims, axis) / 2),
-    },
+    slices: slicesThrough(loaded.frame, marker),
+    activeAxis: 'axial',
     marker,
     selected: null,
     hovered: null,
@@ -140,7 +155,12 @@ const messageOf = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
 export function createViewerStore(deps: CaseDeps = {}): ViewerStore {
   let loadSeq = 0
+  const fetchFn = deps.fetchFn ?? globalThis.fetch.bind(globalThis)
   return createStore<Viewer>()((set, get) => ({
+    stage: 'upload',
+    studyId: null,
+    study: null,
+    studyError: null,
     index: null,
     current: null,
     loading: false,
@@ -150,7 +170,8 @@ export function createViewerStore(deps: CaseDeps = {}): ViewerStore {
     cutaway: { plane: 'none', rasMm: 0 },
     hemisphere: 'none',
     explode: 0,
-    slice: { axis: 'axial', index: 0 },
+    slices: { axial: 0, coronal: 0, sagittal: 0 },
+    activeAxis: 'axial',
     marker: null,
     selected: null,
     hovered: null,
@@ -188,6 +209,7 @@ export function createViewerStore(deps: CaseDeps = {}): ViewerStore {
           current: loaded,
           loading: false,
           error: null,
+          stage: s.stage === 'upload' ? 'workspace' : s.stage,
           ...initialViewFor(loaded),
           focus: { assetId: 'brain_surface', nonce: s.focus.nonce + 1 },
         }))
@@ -199,28 +221,61 @@ export function createViewerStore(deps: CaseDeps = {}): ViewerStore {
       }
     },
 
+    setStage: (stage) => set({ stage }),
+
+    async uploadStudy(files) {
+      set({ studyError: null })
+      try {
+        const studyId = await postStudy(files, fetchFn)
+        set({ stage: 'processing', studyId, study: null })
+      } catch (e) {
+        set({ studyError: messageOf(e) })
+      }
+    },
+
+    async pollStudy() {
+      const id = get().studyId
+      if (!id) return
+      try {
+        const study = await getStudy(id, fetchFn)
+        if (get().studyId === id) set({ study, studyError: null })
+      } catch (e) {
+        if (get().studyId === id) set({ studyError: `lost contact with the study: ${messageOf(e)}` })
+      }
+    },
+
+    // The backend study keeps running; its result is ignored (flow spec §3).
+    cancelStudy: () => set({ stage: 'upload', studyId: null, study: null, studyError: null }),
+
+    async openCase(caseId, provenance) {
+      await get().loadIndex()
+      const r = await get().loadCase(caseId, provenance)
+      if (r.ok) set({ stage: 'workspace' })
+      return r
+    },
+
     setOpacity: (id, value) => set((s) => ({ opacity: { ...s.opacity, [id]: value } })),
     setVisible: (ids, visible) =>
       set((s) => ({ visible: { ...s.visible, ...Object.fromEntries(ids.map((id) => [id, visible])) } })),
     setCutaway: (plane, rasMm) => set({ cutaway: { plane, rasMm } }),
     setHemisphere: (hemisphere) => set({ hemisphere }),
     setExplode: (value) => set((s) => ({ explode: Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : s.explode })),
-    setSlice: (axis, index) => set({ slice: { axis, index } }),
+    setSlice: (axis, index) => set((s) => ({ slices: { ...s.slices, [axis]: index }, activeAxis: axis })),
     setMarker: (marker) => set({ marker }),
+    focusPoint(ras) {
+      const current = get().current
+      if (current) set({ marker: ras, slices: slicesThrough(current.frame, ras) })
+    },
 
     select(id) {
-      const { current, slice } = get()
+      const { current } = get()
       const tumor = current && id ? tumorAssets(current.manifest).find((t) => t.id === id) : undefined
       if (!current || !tumor) {
         set({ selected: id })
         return
       }
       const marker: Vec3 = [...tumor.centroid_ras]
-      set({
-        selected: id,
-        marker,
-        slice: { axis: slice.axis, index: sliceIndexThrough(current.frame, slice.axis, marker) },
-      })
+      set({ selected: id, marker, slices: slicesThrough(current.frame, marker) })
     },
 
     hover(id) {

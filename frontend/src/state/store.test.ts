@@ -23,7 +23,8 @@ describe('viewer store', () => {
     expect(s.cutaway).toEqual({ plane: 'none', rasMm: 0 })
     expect(s.hemisphere).toBe('none')
     expect(s.explode).toBe(0)
-    expect(s.slice).toEqual({ axis: 'axial', index: 25 })
+    expect(s.slices).toEqual({ axial: 25, coronal: 38, sagittal: 19 })
+    expect(s.activeAxis).toBe('axial')
     expect(s.marker).toEqual([-24, 18, 3])
     expect(s.focus).toEqual({ assetId: 'brain_surface', nonce: 1 })
   })
@@ -78,7 +79,7 @@ describe('viewer store', () => {
     expect(store.getState().focus.nonce).toBe(1)
   })
 
-  it('select moves the marker and the slice to the tumour centroid', async () => {
+  it('select moves the marker and all three slices to the tumour centroid', async () => {
     const store = await loadedStore()
     store.getState().setSlice('coronal', 3)
     store.getState().setMarker([0, 0, 0])
@@ -86,7 +87,22 @@ describe('viewer store', () => {
     const s = store.getState()
     expect(s.selected).toBe('tumor_ncr')
     expect(s.marker).toEqual([-24, 18, 3])
-    expect(s.slice).toEqual({ axis: 'coronal', index: 38 })
+    expect(s.slices).toEqual({ axial: 25, coronal: 38, sagittal: 19 })
+    expect(s.activeAxis).toBe('coronal')
+  })
+
+  it('setSlice sets one axis and makes it active', async () => {
+    const store = await loadedStore()
+    store.getState().setSlice('sagittal', 7)
+    expect(store.getState().slices).toEqual({ axial: 25, coronal: 38, sagittal: 7 })
+    expect(store.getState().activeAxis).toBe('sagittal')
+  })
+
+  it('focusPoint moves the marker and all three slices', async () => {
+    const store = await loadedStore()
+    store.getState().focusPoint([0, 0, 0])
+    expect(store.getState().marker).toEqual([0, 0, 0])
+    expect(store.getState().slices).toEqual({ axial: 24, coronal: 32, sagittal: 27 })
   })
 
   it('requestFocus bumps the nonce so the same target can be refocused', async () => {
@@ -128,5 +144,70 @@ describe('viewer store', () => {
     const t = store.getState().transcript
     expect(t).toHaveLength(TRANSCRIPT_CAP)
     expect(t[0].id).toBe('m3')
+  })
+})
+
+const STUDY = {
+  study_id: 'a1b2c3d4e5f6',
+  status: 'done',
+  step: 'measure',
+  steps: {
+    read: { state: 'done', seconds: 0.1 },
+    volume: { state: 'done', dims: [56, 64, 48], spacing_mm: [3, 3, 3] },
+    segment: { state: 'done' },
+    measure: { state: 'done' },
+  },
+  case_id: 'synth_001',
+  error: null,
+}
+
+const json = (status: number, body: unknown) => () => new Response(JSON.stringify(body), { status })
+
+describe('stages and studies', () => {
+  it('starts on upload and moves to processing after a successful upload', async () => {
+    const store = createViewerStore({ fetchFn: fsFetch({ '/api/studies': json(202, { study_id: 'a1b2c3d4e5f6' }) }) })
+    expect(store.getState().stage).toBe('upload')
+    const file = new File(['x'], 'a.nii')
+    await store.getState().uploadStudy({ t1c: file, t1: file, t2: file, flair: file })
+    expect(store.getState().stage).toBe('processing')
+    expect(store.getState().studyId).toBe('a1b2c3d4e5f6')
+    expect(store.getState().studyError).toBeNull()
+  })
+
+  it('stays on upload with the server reason when the upload is rejected', async () => {
+    const store = createViewerStore({ fetchFn: fsFetch({ '/api/studies': json(400, { detail: 't1: shape (1, 2, 3) does not match t1c (4, 5, 6)' }) }) })
+    const file = new File(['x'], 'a.nii')
+    await store.getState().uploadStudy({ t1c: file, t1: file, t2: file, flair: file })
+    expect(store.getState().stage).toBe('upload')
+    expect(store.getState().studyError).toBe('t1: shape (1, 2, 3) does not match t1c (4, 5, 6)')
+  })
+
+  it('polls the study and ignores a cancelled one', async () => {
+    const store = createViewerStore({
+      fetchFn: fsFetch({
+        '/api/studies': json(202, { study_id: 'a1b2c3d4e5f6' }),
+        '/api/studies/a1b2c3d4e5f6': json(200, STUDY),
+      }),
+    })
+    const file = new File(['x'], 'a.nii')
+    await store.getState().uploadStudy({ t1c: file, t1: file, t2: file, flair: file })
+    await store.getState().pollStudy()
+    expect(store.getState().study?.status).toBe('done')
+    store.getState().cancelStudy()
+    expect(store.getState()).toMatchObject({ stage: 'upload', studyId: null, study: null })
+  })
+
+  it('openCase reloads the index and lands on the workspace', async () => {
+    const store = createViewerStore({ fetchFn: fsFetch() })
+    store.getState().setStage('processing')
+    const r = await store.getState().openCase('synth_001')
+    expect(r.ok).toBe(true)
+    expect(store.getState().index?.cases.length).toBeGreaterThan(0)
+    expect(store.getState().stage).toBe('workspace')
+  })
+
+  it('a case loaded from upload moves to the workspace', async () => {
+    const store = await loadedStore()
+    expect(store.getState().stage).toBe('workspace')
   })
 })

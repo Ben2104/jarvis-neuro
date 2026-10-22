@@ -22,6 +22,13 @@ export function AgentConsole() {
 export const canSend = (agent: AgentState, draft: string): boolean =>
   agent.link === 'online' && !agent.busy && draft.trim() !== ''
 
+export const AGENT_CHIPS = [
+  { name: 'Orchestrator', live: true },
+  { name: 'Clinical Reasoner', live: true },
+  { name: 'Vision', live: false },
+  { name: 'Spatial UI', live: false },
+] as const
+
 export interface AgentConsoleViewProps {
   agent: AgentState
   transcript: TranscriptEntry[]
@@ -41,6 +48,17 @@ export function AgentConsoleView({ agent, transcript, log, canListen }: AgentCon
 
   return (
     <section className="panel console" aria-label="Agent console">
+      <ul className="agent-chips" aria-label="Agents">
+        {AGENT_CHIPS.map((a) => (
+          <li
+            key={a.name}
+            className={a.live ? 'chip' : 'chip placeholder'}
+            title={a.live ? undefined : 'Placeholder — not in this build'}
+          >
+            {a.name}
+          </li>
+        ))}
+      </ul>
       <div className="ph">
         <span>Jarvis · Orchestrator</span>
         <span className="chip" title={agent.detail ?? undefined}>

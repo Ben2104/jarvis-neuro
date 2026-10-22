@@ -107,7 +107,8 @@ describe('with synth_001 loaded', () => {
     expect(ok(await call('inspect_mri_slice', { axis: 'axial', index: 999 })).index).toBe(47)
     expect(ok(await call('inspect_mri_slice', { axis: 'axial', index: -5 })).index).toBe(0)
     expect(ok(await call('inspect_mri_slice', { axis: 'axial', index: 10.6 })).index).toBe(11)
-    expect(store.getState().slice).toEqual({ axis: 'axial', index: 11 })
+    expect(store.getState().slices.axial).toBe(11)
+    expect(store.getState().activeAxis).toBe('axial')
   })
 
   it('reports the slice position and the mask labels it crosses', async () => {

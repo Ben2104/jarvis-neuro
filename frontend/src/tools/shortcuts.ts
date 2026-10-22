@@ -60,10 +60,7 @@ export function shortcutToCall(rawKey: string, s: Viewer): ToolRequest | null {
   switch (key) {
     case 'ArrowUp':
     case 'ArrowDown':
-      return {
-        name: 'inspect_mri_slice',
-        args: { axis: s.slice.axis, index: s.slice.index + (key === 'ArrowUp' ? 1 : -1) },
-      }
+      return { name: 'inspect_mri_slice', args: { axis: s.activeAxis, index: s.slices[s.activeAxis] + (key === 'ArrowUp' ? 1 : -1) } }
     case '[':
     case ']': {
       const now = s.opacity.brain_surface ?? 0.45

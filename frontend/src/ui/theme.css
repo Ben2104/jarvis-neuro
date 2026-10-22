@@ -1,32 +1,29 @@
 :root {
-  --bg: #0e1113;
-  --panel: #151a1d;
-  --panel2: #1c2327;
-  --border: #2c353a;
-  --text: #e6ebed;
-  --muted: #a3b0b6;
-  --accent: #5bc0ce;
-  --danger: #ff7a59;
-  --banner-bg: #1a1710;
+  /* Figma NeuroVision (rHjTVYYISZzHWvWNeSKaVE) has no variables; values read from frames 43:3, 44:99, 43:1149 */
+  --bg: #f6f9ff;
+  --panel: #fbf9f5;
+  --panel2: #e8eff7;
+  --border: #c1c7ce;
+  --text: #151c22;
+  --muted: #71787e;
+  --text2: #41484d;
+  --accent: #1f5673;
+  --accent2: #3b6e8c;
+  --accent-soft: #e3eef4;
+  --ok: #2e6b47;
+  --ok-soft: #e2f1e6;
+  --warn: #8a5a12;
+  --warn-soft: #f8ecd6;
+  --danger: #982713;
+  --danger-soft: #ffdad3;
+  --banner-bg: #f8ecd6;
   --stage: #07090a;
-  --font-sans: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
-  color-scheme: dark;
-}
-
-@media (prefers-color-scheme: light) {
-  :root {
-    --bg: #edf0f1;
-    --panel: #ffffff;
-    --panel2: #f3f6f7;
-    --border: #cbd4d8;
-    --text: #14191c;
-    --muted: #4f5c62;
-    --accent: #0b6e7c;
-    --danger: #c9391c;
-    --banner-bg: #fbf3dc;
-    color-scheme: light;
-  }
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 16px;
+  --font-sans: 'Manrope', 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'Cousine', 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  color-scheme: light;
 }
 
 * {

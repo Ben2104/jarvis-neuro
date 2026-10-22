@@ -1,0 +1,16 @@
+.git
+.gitnexus
+.worktrees
+.claude
+**/node_modules
+**/.venv
+**/__pycache__
+**/.pytest_cache
+data
+frontend/dist
+frontend/public/draco
+frontend/public/mediapipe
+frontend/public/cases/study_*
+backend/segresnet_api/weights
+backend/segresnet_api/jobs
+.env

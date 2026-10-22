@@ -1,3 +1,4 @@
+import { tumorAssets } from '../lib/manifest'
 import { useViewer, viewerStore, type CutPlane, type Hemisphere } from '../state/store'
 import { CUT_PLANES, HEMISPHERES } from '../tools/schemas'
 import { cutawayRange, defaultCutMm, resetViewCalls, runTools, runUi } from './controls'
@@ -10,6 +11,7 @@ export function SceneControls() {
   const cutaway = useViewer((s) => s.cutaway)
   const hemisphere = useViewer((s) => s.hemisphere)
   const gesturesOn = useViewer((s) => s.gesturesOn)
+  const brainShown = useViewer((s) => s.visible.brain_surface !== false)
   const s = viewerStore.getState()
 
   const gestureRow = (
@@ -118,6 +120,26 @@ export function SceneControls() {
               </option>
             ))}
           </select>
+        </div>
+        <div className="stack">
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={!brainShown}
+              onChange={(e) => void runUi('toggle_visibility', { asset_ids: ['brain_surface'], visible: !e.target.checked })}
+            />
+            Hide healthy tissue
+          </label>
+          <button
+            className="btn"
+            disabled={tumorAssets(current.manifest).length === 0}
+            onClick={() => {
+              const first = tumorAssets(current.manifest)[0]
+              if (first) void runUi('focus_region', { asset_id: first.id })
+            }}
+          >
+            Focus tumor
+          </button>
         </div>
         <div>
           <button className="btn" onClick={() => void runTools(viewerStore, resetViewCalls(current), 'ui')}>

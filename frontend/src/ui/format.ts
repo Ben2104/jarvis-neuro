@@ -26,3 +26,6 @@ export const fmtVec = (v: Vec3 | null | undefined) => (missing(v) ? DASH : `(${v
 export function totalVolumeMl(tumors: TumorAsset[]): number | null {
   return tumors.length ? tumors.reduce((acc, t) => acc + t.volume_ml, 0) : null
 }
+
+/** Figma fields that need an atlas or a classifier (flow spec decision 2). */
+export const ATLAS_ONLY = 'Requires atlas — not in this build'
