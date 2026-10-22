@@ -3,7 +3,7 @@ import { type StoreApi, createStore } from 'zustand/vanilla'
 import { type CaseFrame, rasToVoxel } from '../lib/affine'
 import { type CaseDeps, type LoadedCase, fetchCase, fetchIndex } from '../lib/loadCase'
 import { type CaseIndex, type Provenance, type Vec3, tumorAssets } from '../lib/manifest'
-import { type Sequence, type Study, getStudy, postStudy } from '../lib/studies'
+import { SEQUENCES, type Sequence, type Study, getStudy, postStudy } from '../lib/studies'
 import { AXES, type Axis, AXIS_DIM, sliceCount } from '../lib/volume'
 
 export type Stage = 'upload' | 'processing' | 'workspace' | 'explore3d'
@@ -52,12 +52,20 @@ export const DEFAULT_OPACITY: Record<string, number> = {
 export const TOOL_LOG_CAP = 50
 export const TRANSCRIPT_CAP = 50
 
+/** What the user uploaded, kept for the Processing screen; no File objects held. */
+export interface UploadedFile {
+  slot: Sequence
+  name: string
+  size: number
+}
+
 export type LoadCaseResult = { ok: true; loaded: LoadedCase } | { ok: false; error: string }
 
 export interface ViewerState {
   stage: Stage
   studyId: string | null
   study: Study | null
+  uploadedFiles: UploadedFile[]
   /** Upload rejection or lost contact with the study API, one line. */
   studyError: string | null
   index: CaseIndex | null
@@ -160,6 +168,7 @@ export function createViewerStore(deps: CaseDeps = {}): ViewerStore {
     stage: 'upload',
     studyId: null,
     study: null,
+    uploadedFiles: [],
     studyError: null,
     index: null,
     current: null,
@@ -227,7 +236,12 @@ export function createViewerStore(deps: CaseDeps = {}): ViewerStore {
       set({ studyError: null })
       try {
         const studyId = await postStudy(files, fetchFn)
-        set({ stage: 'processing', studyId, study: null })
+        set({
+          stage: 'processing',
+          studyId,
+          study: null,
+          uploadedFiles: SEQUENCES.map((slot) => ({ slot, name: files[slot].name, size: files[slot].size })),
+        })
       } catch (e) {
         set({ studyError: messageOf(e) })
       }
@@ -245,7 +259,7 @@ export function createViewerStore(deps: CaseDeps = {}): ViewerStore {
     },
 
     // The backend study keeps running; its result is ignored (flow spec §3).
-    cancelStudy: () => set({ stage: 'upload', studyId: null, study: null, studyError: null }),
+    cancelStudy: () => set({ stage: 'upload', studyId: null, study: null, uploadedFiles: [], studyError: null }),
 
     async openCase(caseId, provenance) {
       await get().loadIndex()

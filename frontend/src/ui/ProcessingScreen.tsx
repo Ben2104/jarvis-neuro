@@ -1,7 +1,10 @@
 import { useEffect } from 'react'
 import type { Study } from '../lib/studies'
 import { useViewer, viewerStore } from '../state/store'
+import type { UploadedFile } from '../state/store'
 import { FlowStepper } from './FlowStepper'
+import { fmtBytes } from './format'
+import { SLOT_LABEL } from './UploadScreen'
 
 type StepKey = keyof Study['steps']
 type StepState = Study['steps'][StepKey]['state']
@@ -39,7 +42,26 @@ export function rowsFor(study: Study | null): Row[] {
   }))
 }
 
+export function FileCard({ files }: { files: UploadedFile[] }) {
+  if (!files.length) return null
+  return (
+    <ul className="file-card" aria-label="Uploaded files">
+      {files.map((f) => (
+        <li key={f.slot} className="file-row">
+          <span className="file-icon" aria-hidden="true">▤</span>
+          <span className="file-meta">
+            <span className="mono">{f.name}</span>
+            <span className="muted small">NIfTI volume · {SLOT_LABEL[f.slot]} · {fmtBytes(f.size)}</span>
+          </span>
+          <span className="badge ok">✓ Uploaded</span>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
 export function ProcessingScreen() {
+  const files = useViewer((s) => s.uploadedFiles)
   const study = useViewer((s) => s.study)
   const studyId = useViewer((s) => s.studyId)
   const error = useViewer((s) => s.studyError)
@@ -60,6 +82,7 @@ export function ProcessingScreen() {
       <h1>Preparing your study</h1>
       <p className="lede">Hang tight. The MRI Workspace opens as soon as segmentation finishes.</p>
       <section className="progress-card">
+        <FileCard files={files} />
         <p className="muted mono small">Study {studyId}</p>
         <ol className="steps">
           {rowsFor(study).map((r) => (
@@ -75,6 +98,7 @@ export function ProcessingScreen() {
         </ol>
         {error && <p className="error-line" role="alert">{error}</p>}
         <div className="upload-actions">
+          <p className="hint muted small">Next, say “Place the tumor in 3D” to the Neuro agent, or use the button.</p>
           <button className="btn" onClick={() => s.cancelStudy()}>Cancel</button>
           <button
             className="btn primary"

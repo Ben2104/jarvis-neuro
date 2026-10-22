@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { ManifestSchema, tumorAssets } from '../lib/manifest'
 import { readSynthManifestJson } from '../test/fixtures'
-import { ATLAS_ONLY, DASH, TUMOR_LABEL, fmtDice, fmtMl, fmtMm, fmtVec, totalVolumeMl } from './format'
+import { ATLAS_ONLY, DASH, TUMOR_LABEL, fmtDice, fmtMl, fmtBytes, fmtMm, fmtVec, totalVolumeMl } from './format'
 
 const tumors = tumorAssets(ManifestSchema.parse(readSynthManifestJson()))
 
@@ -36,4 +36,10 @@ describe('format', () => {
 
 it('names the atlas-only text exactly', () => {
   expect(ATLAS_ONLY).toBe('Requires atlas — not in this build')
+})
+
+it('formats byte sizes', () => {
+  expect(fmtBytes(512)).toBe('512 B')
+  expect(fmtBytes(2048)).toBe('2.0 KB')
+  expect(fmtBytes(50_540_000)).toBe('48.2 MB')
 })

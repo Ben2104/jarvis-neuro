@@ -172,6 +172,12 @@ describe('stages and studies', () => {
     expect(store.getState().stage).toBe('processing')
     expect(store.getState().studyId).toBe('a1b2c3d4e5f6')
     expect(store.getState().studyError).toBeNull()
+    expect(store.getState().uploadedFiles).toEqual([
+      { slot: 't1c', name: 'a.nii', size: 1 },
+      { slot: 't1', name: 'a.nii', size: 1 },
+      { slot: 't2', name: 'a.nii', size: 1 },
+      { slot: 'flair', name: 'a.nii', size: 1 },
+    ])
   })
 
   it('stays on upload with the server reason when the upload is rejected', async () => {
@@ -194,7 +200,7 @@ describe('stages and studies', () => {
     await store.getState().pollStudy()
     expect(store.getState().study?.status).toBe('done')
     store.getState().cancelStudy()
-    expect(store.getState()).toMatchObject({ stage: 'upload', studyId: null, study: null })
+    expect(store.getState()).toMatchObject({ stage: 'upload', studyId: null, study: null, uploadedFiles: [] })
   })
 
   it('openCase reloads the index and lands on the workspace', async () => {
