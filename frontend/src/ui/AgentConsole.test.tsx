@@ -54,3 +54,10 @@ it('allows Send only for text, online and not mid-turn', () => {
   expect(canSend(agent({ link: 'offline' }), 'hide the left')).toBe(false)
   expect(canSend(agent({ link: 'online' }), '   ')).toBe(false)
 })
+
+it('lists the live agents and greys the placeholders', () => {
+  const html = render(agent())
+  for (const name of ['Orchestrator', 'Clinical Reasoner', 'Vision', 'Spatial UI']) expect(html).toContain(name)
+  expect(html.match(/class="chip placeholder"/g)).toHaveLength(2)
+  expect(html).toContain('title="Placeholder — not in this build"')
+})

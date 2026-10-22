@@ -1,9 +1,9 @@
 import { hemisphereOf, tumorAssets } from '../lib/manifest'
 import { useViewer } from '../state/store'
 import { runUi } from './controls'
-import { DASH, PROVENANCE_LABEL, TUMOR_LABEL, fmtDice, fmtMl, fmtMm, fmtVec, totalVolumeMl } from './format'
+import { ATLAS_ONLY, DASH, PROVENANCE_LABEL, TUMOR_LABEL, fmtDice, fmtMl, fmtMm, fmtVec, totalVolumeMl } from './format'
 
-function Row({ k, v }: { k: string; v: string }) {
+export function Row({ k, v }: { k: string; v: string }) {
   return (
     <div className="row">
       <span className="k">{k}</span>
@@ -37,7 +37,7 @@ export function FindingsPanel() {
   return (
     <section className="panel" aria-label="Findings">
       <div className="ph">
-        <span>Findings</span>
+        <span>Volumetric Analysis</span>
         <span className="chip mono">manifest.json</span>
       </div>
       <div className="pad stack">
@@ -45,6 +45,7 @@ export function FindingsPanel() {
         <Row k="Segmentation" v={PROVENANCE_LABEL[m.provenance]} />
         <hr />
         <div className="lbl">Sub-regions</div>
+        {tumors.length === 0 && <p className="pad">No tumor detected</p>}
         {tumors.map((t) => (
           <div className="row" key={t.id}>
             <span className="check">
@@ -62,13 +63,21 @@ export function FindingsPanel() {
             <span className="v">{fmtMl(t.volume_ml)}</span>
           </div>
         ))}
-        <hr />
-        <Row k="Sum of sub-regions" v={fmtMl(totalVolumeMl(tumors))} />
+        {tumors.length > 0 && (
+          <>
+            <hr />
+            <Row k="Sum of sub-regions" v={fmtMl(totalVolumeMl(tumors))} />
+          </>
+        )}
         {dice && Object.keys(dice).length > 0 ? (
           Object.entries(dice).map(([key, value]) => <Row key={key} k={`Dice vs ground truth · ${key}`} v={fmtDice(value)} />)
         ) : (
           <Row k="Dice vs ground truth" v={DASH} />
         )}
+        <hr />
+        <Row k="Lobe" v={ATLAS_ONLY} />
+        <Row k="Tumor type" v={ATLAS_ONLY} />
+        <Row k="Eloquent cortex" v={ATLAS_ONLY} />
         <hr />
         {sel ? (
           <>

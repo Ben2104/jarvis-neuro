@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { ManifestSchema, tumorAssets } from '../lib/manifest'
 import { readSynthManifestJson } from '../test/fixtures'
-import { DASH, TUMOR_LABEL, fmtDice, fmtMl, fmtMm, fmtVec, totalVolumeMl } from './format'
+import { ATLAS_ONLY, DASH, TUMOR_LABEL, fmtDice, fmtMl, fmtMm, fmtVec, totalVolumeMl } from './format'
 
 const tumors = tumorAssets(ManifestSchema.parse(readSynthManifestJson()))
 
@@ -32,4 +32,8 @@ describe('format', () => {
       tumor_et: 'Enhancing tumor (label 3)',
     })
   })
+})
+
+it('names the atlas-only text exactly', () => {
+  expect(ATLAS_ONLY).toBe('Requires atlas — not in this build')
 })
