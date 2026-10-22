@@ -3,8 +3,10 @@ import { type StoreApi, createStore } from 'zustand/vanilla'
 import { type CaseFrame, rasToVoxel } from '../lib/affine'
 import { type CaseDeps, type LoadedCase, fetchCase, fetchIndex } from '../lib/loadCase'
 import { type CaseIndex, type Provenance, type Vec3, tumorAssets } from '../lib/manifest'
+import { type Sequence, type Study, getStudy, postStudy } from '../lib/studies'
 import { AXES, type Axis, AXIS_DIM, sliceCount } from '../lib/volume'
 
+export type Stage = 'upload' | 'processing' | 'workspace' | 'explore3d'
 export type CutPlane = 'axial' | 'coronal' | 'sagittal' | 'none'
 export type Hemisphere = 'left' | 'right' | 'none'
 export type ToolSource = 'agent' | 'keyboard' | 'gesture' | 'ui'
@@ -53,6 +55,11 @@ export const TRANSCRIPT_CAP = 50
 export type LoadCaseResult = { ok: true; loaded: LoadedCase } | { ok: false; error: string }
 
 export interface ViewerState {
+  stage: Stage
+  studyId: string | null
+  study: Study | null
+  /** Upload rejection or lost contact with the study API, one line. */
+  studyError: string | null
   index: CaseIndex | null
   current: LoadedCase | null
   loading: boolean
@@ -78,6 +85,11 @@ export interface ViewerState {
 }
 
 export interface ViewerActions {
+  setStage(stage: Stage): void
+  uploadStudy(files: Record<Sequence, File>): Promise<void>
+  pollStudy(): Promise<void>
+  cancelStudy(): void
+  openCase(caseId: string, provenance?: Provenance): Promise<LoadCaseResult>
   loadIndex(): Promise<void>
   loadCase(caseId: string, provenance?: Provenance): Promise<LoadCaseResult>
   setOpacity(id: string, value: number): void
@@ -143,7 +155,12 @@ const messageOf = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
 export function createViewerStore(deps: CaseDeps = {}): ViewerStore {
   let loadSeq = 0
+  const fetchFn = deps.fetchFn ?? globalThis.fetch.bind(globalThis)
   return createStore<Viewer>()((set, get) => ({
+    stage: 'upload',
+    studyId: null,
+    study: null,
+    studyError: null,
     index: null,
     current: null,
     loading: false,
@@ -192,6 +209,7 @@ export function createViewerStore(deps: CaseDeps = {}): ViewerStore {
           current: loaded,
           loading: false,
           error: null,
+          stage: s.stage === 'upload' ? 'workspace' : s.stage,
           ...initialViewFor(loaded),
           focus: { assetId: 'brain_surface', nonce: s.focus.nonce + 1 },
         }))
@@ -201,6 +219,39 @@ export function createViewerStore(deps: CaseDeps = {}): ViewerStore {
         if (token === loadSeq) set({ loading: false, error })
         return { ok: false, error }
       }
+    },
+
+    setStage: (stage) => set({ stage }),
+
+    async uploadStudy(files) {
+      set({ studyError: null })
+      try {
+        const studyId = await postStudy(files, fetchFn)
+        set({ stage: 'processing', studyId, study: null })
+      } catch (e) {
+        set({ studyError: messageOf(e) })
+      }
+    },
+
+    async pollStudy() {
+      const id = get().studyId
+      if (!id) return
+      try {
+        const study = await getStudy(id, fetchFn)
+        if (get().studyId === id) set({ study, studyError: null })
+      } catch (e) {
+        if (get().studyId === id) set({ studyError: `lost contact with the study: ${messageOf(e)}` })
+      }
+    },
+
+    // The backend study keeps running; its result is ignored (flow spec §3).
+    cancelStudy: () => set({ stage: 'upload', studyId: null, study: null, studyError: null }),
+
+    async openCase(caseId, provenance) {
+      await get().loadIndex()
+      const r = await get().loadCase(caseId, provenance)
+      if (r.ok) set({ stage: 'workspace' })
+      return r
     },
 
     setOpacity: (id, value) => set((s) => ({ opacity: { ...s.opacity, [id]: value } })),

@@ -146,3 +146,68 @@ describe('viewer store', () => {
     expect(t[0].id).toBe('m3')
   })
 })
+
+const STUDY = {
+  study_id: 'a1b2c3d4e5f6',
+  status: 'done',
+  step: 'measure',
+  steps: {
+    read: { state: 'done', seconds: 0.1 },
+    volume: { state: 'done', dims: [56, 64, 48], spacing_mm: [3, 3, 3] },
+    segment: { state: 'done' },
+    measure: { state: 'done' },
+  },
+  case_id: 'synth_001',
+  error: null,
+}
+
+const json = (status: number, body: unknown) => () => new Response(JSON.stringify(body), { status })
+
+describe('stages and studies', () => {
+  it('starts on upload and moves to processing after a successful upload', async () => {
+    const store = createViewerStore({ fetchFn: fsFetch({ '/api/studies': json(202, { study_id: 'a1b2c3d4e5f6' }) }) })
+    expect(store.getState().stage).toBe('upload')
+    const file = new File(['x'], 'a.nii')
+    await store.getState().uploadStudy({ t1c: file, t1: file, t2: file, flair: file })
+    expect(store.getState().stage).toBe('processing')
+    expect(store.getState().studyId).toBe('a1b2c3d4e5f6')
+    expect(store.getState().studyError).toBeNull()
+  })
+
+  it('stays on upload with the server reason when the upload is rejected', async () => {
+    const store = createViewerStore({ fetchFn: fsFetch({ '/api/studies': json(400, { detail: 't1: shape (1, 2, 3) does not match t1c (4, 5, 6)' }) }) })
+    const file = new File(['x'], 'a.nii')
+    await store.getState().uploadStudy({ t1c: file, t1: file, t2: file, flair: file })
+    expect(store.getState().stage).toBe('upload')
+    expect(store.getState().studyError).toBe('t1: shape (1, 2, 3) does not match t1c (4, 5, 6)')
+  })
+
+  it('polls the study and ignores a cancelled one', async () => {
+    const store = createViewerStore({
+      fetchFn: fsFetch({
+        '/api/studies': json(202, { study_id: 'a1b2c3d4e5f6' }),
+        '/api/studies/a1b2c3d4e5f6': json(200, STUDY),
+      }),
+    })
+    const file = new File(['x'], 'a.nii')
+    await store.getState().uploadStudy({ t1c: file, t1: file, t2: file, flair: file })
+    await store.getState().pollStudy()
+    expect(store.getState().study?.status).toBe('done')
+    store.getState().cancelStudy()
+    expect(store.getState()).toMatchObject({ stage: 'upload', studyId: null, study: null })
+  })
+
+  it('openCase reloads the index and lands on the workspace', async () => {
+    const store = createViewerStore({ fetchFn: fsFetch() })
+    store.getState().setStage('processing')
+    const r = await store.getState().openCase('synth_001')
+    expect(r.ok).toBe(true)
+    expect(store.getState().index?.cases.length).toBeGreaterThan(0)
+    expect(store.getState().stage).toBe('workspace')
+  })
+
+  it('a case loaded from upload moves to the workspace', async () => {
+    const store = await loadedStore()
+    expect(store.getState().stage).toBe('workspace')
+  })
+})
