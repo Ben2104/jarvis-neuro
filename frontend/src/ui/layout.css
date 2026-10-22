@@ -719,3 +719,6 @@ kbd {
 .toast span:not(.check-dot) { color: var(--text); font-size: 12px; }
 .toast .btn { border-radius: 999px; padding: 4px 12px; font-size: 11px; }
 .check-dot { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--ok); color: #fff; font-size: 12px; }
+.badge-tag.prov-ground-truth { background: var(--ok-soft); color: var(--ok); }
+.badge-tag.prov-monai-segresnet { background: #dbe9f1; color: var(--accent); }
+.badge-tag.prov-synthetic { background: var(--panel); color: var(--muted); border: 1px solid var(--border); }
