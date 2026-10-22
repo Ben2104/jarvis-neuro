@@ -14,9 +14,8 @@ WORKDIR /app
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
 
-# 2. Application code, viewer, weights
+# 2. Application code (weights/ is mounted by compose.yaml, not baked in)
 COPY src/ ./src/
-COPY weights/ ./weights/
 
 # 3. Run as non-root user
 RUN useradd --create-home appuser \
