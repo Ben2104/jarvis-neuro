@@ -40,3 +40,19 @@ def make_synthetic_msd(root: Path, seed: int = 0) -> Path:
     nib.save(nib.Nifti1Image(labels, SYNTH_AFFINE), root / "labelsTr" / f"{SYNTH_NAME}.nii.gz")
     (root / "dataset.json").write_text(json.dumps(DATASET_JSON, indent=2))
     return root
+
+
+SYNTH_STUDY_CHANNELS = {"flair": 0, "t1": 1, "t1c": 2, "t2": 3}
+
+
+def write_synthetic_study(root: Path) -> dict[str, Path]:
+    """The synthetic case as four 3D NIfTIs named like an upload, on the raw LAS grid.
+    Its labels stay at root/msd/labelsTr/SYNTH_001.nii.gz (MSD convention)."""
+    root = Path(root)
+    msd = make_synthetic_msd(root / "msd")
+    image = np.asarray(nib.load(msd / "imagesTr" / f"{SYNTH_NAME}.nii.gz").dataobj)
+    files = {}
+    for name, channel in SYNTH_STUDY_CHANNELS.items():
+        files[name] = root / f"synth_{name}.nii.gz"
+        nib.save(nib.Nifti1Image(image[..., channel], SYNTH_AFFINE), files[name])
+    return files
