@@ -665,3 +665,22 @@ kbd {
 .upload-secondary p { margin: 2px 0 0; }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
 .btn.primary:hover:not(:disabled) { background: var(--accent2); }
+
+/* Processing */
+.processing-screen { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 28px 16px 40px; overflow: auto; }
+.processing-screen h1 { margin: 0; font-size: 36px; font-weight: 700; }
+.processing-screen .lede { margin: 0; color: var(--muted); font-size: 15px; }
+.progress-card { width: min(880px, 100%); box-sizing: border-box; padding: 20px 24px; border: 1.5px solid var(--accent); border-radius: var(--radius-lg); background: var(--panel); box-shadow: 0 8px 24px rgba(21, 28, 34, 0.08); }
+.progress-card .upload-actions { justify-content: flex-end; margin-top: 16px; }
+.steps { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
+.step { display: grid; grid-template-columns: 22px auto 1fr; align-items: center; gap: 12px; }
+.step .bar { grid-column: 2 / -1; }
+.state-dot { display: grid; place-items: center; width: 22px; height: 22px; box-sizing: border-box; border-radius: 50%; border: 1.5px solid var(--border); color: #fff; font-size: 12px; font-weight: 700; }
+.step.running .state-dot { border-color: var(--accent); }
+.step.done .state-dot { background: var(--ok); border-color: var(--ok); }
+.step.failed .state-dot { background: var(--danger); border-color: var(--danger); }
+.step.failed .small { color: var(--danger); }
+.bar.indeterminate { height: 6px; border-radius: 3px; background: #e6e9ec; position: relative; overflow: hidden; }
+.bar.indeterminate::after { content: ''; position: absolute; inset: 0 auto 0 0; width: 35%; background: var(--accent); border-radius: 3px; animation: bar-slide 1.4s ease-in-out infinite; }
+@keyframes bar-slide { from { transform: translateX(-100%); } to { transform: translateX(300%); } }
+@media (prefers-reduced-motion: reduce) { .bar.indeterminate::after { animation: none; width: 100%; opacity: 0.5; } }
