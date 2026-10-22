@@ -708,3 +708,14 @@ kbd {
 .step.running .state-dot { border-top-color: transparent; animation: step-spin 0.9s linear infinite; }
 @keyframes step-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .step.running .state-dot { animation: none; border-top-color: var(--accent); } }
+
+/* 3D: pathology summary and placed banner */
+.pathology h2 { margin: 0; font-size: 18px; font-weight: 700; }
+.badge-tag { align-self: flex-start; padding: 4px 10px; border-radius: var(--radius-sm); background: var(--danger-soft); color: #3f0400; font-size: 11px; font-weight: 600; }
+.readouts { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 12px; border: 1px solid var(--border); border-radius: 12px; background: #fff; }
+.readouts > div { display: flex; flex-direction: column; gap: 2px; }
+.readouts b { font-size: 16px; }
+.toast { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); z-index: 5; display: flex; align-items: center; gap: 10px; padding: 8px 10px 8px 14px; border: 1px solid var(--ok); border-radius: 999px; background: var(--ok-soft); color: var(--ok); font-size: 13px; white-space: nowrap; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08); }
+.toast span:not(.check-dot) { color: var(--text); font-size: 12px; }
+.toast .btn { border-radius: 999px; padding: 4px 12px; font-size: 11px; }
+.check-dot { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--ok); color: #fff; font-size: 12px; }

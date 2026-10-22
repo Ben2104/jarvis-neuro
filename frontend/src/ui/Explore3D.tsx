@@ -3,6 +3,7 @@ import { tumorAssets } from '../lib/manifest'
 import { useViewer } from '../state/store'
 import { AgentConsole } from './AgentConsole'
 import { FindingsPanel } from './FindingsPanel'
+import { PathologySummary, PlacedBanner } from './PathologySummary'
 import { SceneControls } from './SceneControls'
 import { ShortcutLegend } from './ShortcutLegend'
 import { ViewportPanel } from './ViewportPanel'
@@ -55,12 +56,14 @@ export function Explore3D() {
   return (
     <main className="app-grid">
       <div className="left-col">
+        <PathologySummary />
         <FindingsPanel />
         <SceneControls />
       </div>
       <div className="center-col">
         <ViewportPanel>
           <GestureCursor />
+          <PlacedBanner />
         </ViewportPanel>
         <StructuresBar />
       </div>
