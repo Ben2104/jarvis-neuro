@@ -23,7 +23,8 @@ describe('viewer store', () => {
     expect(s.cutaway).toEqual({ plane: 'none', rasMm: 0 })
     expect(s.hemisphere).toBe('none')
     expect(s.explode).toBe(0)
-    expect(s.slice).toEqual({ axis: 'axial', index: 25 })
+    expect(s.slices).toEqual({ axial: 25, coronal: 38, sagittal: 19 })
+    expect(s.activeAxis).toBe('axial')
     expect(s.marker).toEqual([-24, 18, 3])
     expect(s.focus).toEqual({ assetId: 'brain_surface', nonce: 1 })
   })
@@ -78,7 +79,7 @@ describe('viewer store', () => {
     expect(store.getState().focus.nonce).toBe(1)
   })
 
-  it('select moves the marker and the slice to the tumour centroid', async () => {
+  it('select moves the marker and all three slices to the tumour centroid', async () => {
     const store = await loadedStore()
     store.getState().setSlice('coronal', 3)
     store.getState().setMarker([0, 0, 0])
@@ -86,7 +87,22 @@ describe('viewer store', () => {
     const s = store.getState()
     expect(s.selected).toBe('tumor_ncr')
     expect(s.marker).toEqual([-24, 18, 3])
-    expect(s.slice).toEqual({ axis: 'coronal', index: 38 })
+    expect(s.slices).toEqual({ axial: 25, coronal: 38, sagittal: 19 })
+    expect(s.activeAxis).toBe('coronal')
+  })
+
+  it('setSlice sets one axis and makes it active', async () => {
+    const store = await loadedStore()
+    store.getState().setSlice('sagittal', 7)
+    expect(store.getState().slices).toEqual({ axial: 25, coronal: 38, sagittal: 7 })
+    expect(store.getState().activeAxis).toBe('sagittal')
+  })
+
+  it('focusPoint moves the marker and all three slices', async () => {
+    const store = await loadedStore()
+    store.getState().focusPoint([0, 0, 0])
+    expect(store.getState().marker).toEqual([0, 0, 0])
+    expect(store.getState().slices).toEqual({ axial: 24, coronal: 32, sagittal: 27 })
   })
 
   it('requestFocus bumps the nonce so the same target can be refocused', async () => {

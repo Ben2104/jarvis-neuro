@@ -31,7 +31,7 @@ export function App() {
           <SceneControls />
         </div>
         <div className="right-col">
-          <MriPanel />
+          <MriPanel axis="axial" />
           <FindingsPanel />
         </div>
       </main>

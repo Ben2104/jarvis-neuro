@@ -3,7 +3,7 @@ import { type StoreApi, createStore } from 'zustand/vanilla'
 import { type CaseFrame, rasToVoxel } from '../lib/affine'
 import { type CaseDeps, type LoadedCase, fetchCase, fetchIndex } from '../lib/loadCase'
 import { type CaseIndex, type Provenance, type Vec3, tumorAssets } from '../lib/manifest'
-import { type Axis, AXIS_DIM, sliceCount } from '../lib/volume'
+import { AXES, type Axis, AXIS_DIM, sliceCount } from '../lib/volume'
 
 export type CutPlane = 'axial' | 'coronal' | 'sagittal' | 'none'
 export type Hemisphere = 'left' | 'right' | 'none'
@@ -61,7 +61,8 @@ export interface ViewerState {
   visible: Record<string, boolean>
   cutaway: { plane: CutPlane; rasMm: number }
   hemisphere: Hemisphere
-  slice: { axis: Axis; index: number }
+  slices: Record<Axis, number>
+  activeAxis: Axis
   marker: Vec3 | null
   selected: string | null
   hovered: string | null
@@ -86,6 +87,8 @@ export interface ViewerActions {
   setExplode(value: number): void
   setSlice(axis: Axis, index: number): void
   setMarker(ras: Vec3 | null): void
+  /** Move the marker and put all three slices through it. */
+  focusPoint(ras: Vec3): void
   select(id: string | null): void
   hover(id: string | null): void
   requestFocus(assetId: string): void
@@ -108,28 +111,28 @@ export function sliceIndexThrough(frame: CaseFrame, axis: Axis, ras: Vec3): numb
   return clampIndex(Math.round(rasToVoxel(frame, ras)[AXIS_DIM[axis]]), sliceCount(frame.dims, axis))
 }
 
+export function slicesThrough(frame: CaseFrame, ras: Vec3 | null): Record<Axis, number> {
+  const at = (axis: Axis) => (ras ? sliceIndexThrough(frame, axis, ras) : Math.floor(sliceCount(frame.dims, axis) / 2))
+  return Object.fromEntries(AXES.map((axis) => [axis, at(axis)])) as Record<Axis, number>
+}
+
 type InitialView = Pick<
   ViewerState,
-  'opacity' | 'visible' | 'cutaway' | 'hemisphere' | 'explode' | 'slice' | 'marker' | 'selected' | 'hovered'
+  'opacity' | 'visible' | 'cutaway' | 'hemisphere' | 'explode' | 'slices' | 'activeAxis' | 'marker' | 'selected' | 'hovered'
 >
 
 export function initialViewFor(loaded: LoadedCase): InitialView {
   const ids = loaded.manifest.assets.map((a) => a.id)
   const first = tumorAssets(loaded.manifest)[0]
   const marker: Vec3 | null = first ? [...first.centroid_ras] : null
-  const axis: Axis = 'axial'
   return {
     opacity: Object.fromEntries(ids.map((id) => [id, DEFAULT_OPACITY[id] ?? 1])),
     visible: Object.fromEntries(ids.map((id) => [id, true])),
     cutaway: { plane: 'none', rasMm: 0 },
     hemisphere: 'none',
     explode: 0,
-    slice: {
-      axis,
-      index: marker
-        ? sliceIndexThrough(loaded.frame, axis, marker)
-        : Math.floor(sliceCount(loaded.frame.dims, axis) / 2),
-    },
+    slices: slicesThrough(loaded.frame, marker),
+    activeAxis: 'axial',
     marker,
     selected: null,
     hovered: null,
@@ -150,7 +153,8 @@ export function createViewerStore(deps: CaseDeps = {}): ViewerStore {
     cutaway: { plane: 'none', rasMm: 0 },
     hemisphere: 'none',
     explode: 0,
-    slice: { axis: 'axial', index: 0 },
+    slices: { axial: 0, coronal: 0, sagittal: 0 },
+    activeAxis: 'axial',
     marker: null,
     selected: null,
     hovered: null,
@@ -205,22 +209,22 @@ export function createViewerStore(deps: CaseDeps = {}): ViewerStore {
     setCutaway: (plane, rasMm) => set({ cutaway: { plane, rasMm } }),
     setHemisphere: (hemisphere) => set({ hemisphere }),
     setExplode: (value) => set((s) => ({ explode: Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : s.explode })),
-    setSlice: (axis, index) => set({ slice: { axis, index } }),
+    setSlice: (axis, index) => set((s) => ({ slices: { ...s.slices, [axis]: index }, activeAxis: axis })),
     setMarker: (marker) => set({ marker }),
+    focusPoint(ras) {
+      const current = get().current
+      if (current) set({ marker: ras, slices: slicesThrough(current.frame, ras) })
+    },
 
     select(id) {
-      const { current, slice } = get()
+      const { current } = get()
       const tumor = current && id ? tumorAssets(current.manifest).find((t) => t.id === id) : undefined
       if (!current || !tumor) {
         set({ selected: id })
         return
       }
       const marker: Vec3 = [...tumor.centroid_ras]
-      set({
-        selected: id,
-        marker,
-        slice: { axis: slice.axis, index: sliceIndexThrough(current.frame, slice.axis, marker) },
-      })
+      set({ selected: id, marker, slices: slicesThrough(current.frame, marker) })
     },
 
     hover(id) {

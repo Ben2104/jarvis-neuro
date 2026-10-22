@@ -2,8 +2,8 @@ import { type MouseEvent, useEffect, useMemo, useRef } from 'react'
 import { type CaseFrame, voxelSpacing } from '../lib/affine'
 import { tumorAssets } from '../lib/manifest'
 import { markerToSlicePixel, outlineColors, renderSlice, slicePointToRas, sliceRasMm } from '../lib/slice'
-import { AXES, type Axis, SLICE_EDGE_LABELS, sliceCount, sliceShape } from '../lib/volume'
-import { sliceIndexThrough, useViewer, viewerStore } from '../state/store'
+import { type Axis, SLICE_EDGE_LABELS, sliceCount, sliceShape } from '../lib/volume'
+import { useViewer, viewerStore } from '../state/store'
 import { TUMOR_LABEL, fmtMm } from './format'
 
 const CANVAS_WIDTH = 512
@@ -17,9 +17,10 @@ function pixelSpacing(f: CaseFrame, axis: Axis): { col: number; row: number } {
   return { col: sj, row: sk }
 }
 
-export function MriPanel() {
+export function MriPanel({ axis, large = false }: { axis: Axis; large?: boolean }) {
   const current = useViewer((s) => s.current)
-  const slice = useViewer((s) => s.slice)
+  const index = useViewer((s) => s.slices[axis])
+  const active = useViewer((s) => s.activeAxis === axis)
   const marker = useViewer((s) => s.marker)
   const visible = useViewer((s) => s.visible)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -27,15 +28,15 @@ export function MriPanel() {
   const image = useMemo(() => {
     if (!current) return null
     const outline = outlineColors(tumorAssets(current.manifest), visible)
-    return renderSlice(current.flair, current.mask, slice.axis, slice.index, outline)
-  }, [current, slice, visible])
+    return renderSlice(current.flair, current.mask, axis, index, outline)
+  }, [current, axis, index, visible])
 
   const canvasHeight = useMemo(() => {
     if (!current) return CANVAS_WIDTH
-    const { width, height } = sliceShape(current.frame.dims, slice.axis)
-    const sp = pixelSpacing(current.frame, slice.axis)
+    const { width, height } = sliceShape(current.frame.dims, axis)
+    const sp = pixelSpacing(current.frame, axis)
     return Math.round((CANVAS_WIDTH * height * sp.row) / (width * sp.col))
-  }, [current, slice.axis])
+  }, [current, axis])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -50,10 +51,10 @@ export function MriPanel() {
     ctx.drawImage(off, 0, 0, canvas.width, canvas.height)
 
     if (!marker) return
-    const px = markerToSlicePixel(current.frame, slice.axis, marker)
+    const px = markerToSlicePixel(current.frame, axis, marker)
     const x = ((px.col + 0.5) / image.width) * canvas.width
     const y = ((px.row + 0.5) / image.height) * canvas.height
-    const onSlice = Math.round(px.index) === slice.index
+    const onSlice = Math.round(px.index) === index
     ctx.strokeStyle = '#5BC0CE'
     ctx.globalAlpha = onSlice ? 0.95 : 0.5
     ctx.lineWidth = 2
@@ -66,50 +67,33 @@ export function MriPanel() {
     ctx.stroke()
     ctx.globalAlpha = 1
     ctx.setLineDash([])
-  }, [image, marker, current, slice, canvasHeight])
+  }, [image, marker, current, axis, index, canvasHeight])
 
   if (!current || !image) {
     return (
       <section className="panel mri">
-        <h2>MRI · FLAIR</h2>
+        <h2>{axis}</h2>
         <p className="muted">No case loaded.</p>
       </section>
     )
   }
 
-  const count = sliceCount(current.frame.dims, slice.axis)
-  const edges = SLICE_EDGE_LABELS[slice.axis]
+  const count = sliceCount(current.frame.dims, axis)
+  const edges = SLICE_EDGE_LABELS[axis]
   const s = viewerStore.getState()
-
-  const pickAxis = (axis: Axis) => {
-    const index = marker ? sliceIndexThrough(current.frame, axis, marker) : Math.floor(sliceCount(current.frame.dims, axis) / 2)
-    s.setSlice(axis, index)
-  }
 
   const onCanvasClick = (e: MouseEvent<HTMLCanvasElement>) => {
     const rect = e.currentTarget.getBoundingClientRect()
     const col = ((e.clientX - rect.left) / rect.width) * image.width - 0.5
     const row = ((e.clientY - rect.top) / rect.height) * image.height - 0.5
-    s.setMarker(slicePointToRas(current.frame, slice.axis, slice.index, col, row))
+    s.setSlice(axis, index)
+    s.focusPoint(slicePointToRas(current.frame, axis, index, col, row))
   }
 
   return (
-    <section className="panel mri">
+    <section className={`panel mri${large ? ' large' : ''}${active ? ' active' : ''}`} aria-label={`${axis} MRI`}>
       <div className="panel-head">
-        <h2>MRI · FLAIR</h2>
-        <div className="tabs" role="tablist">
-          {AXES.map((axis) => (
-            <button
-              key={axis}
-              role="tab"
-              aria-selected={axis === slice.axis}
-              className={axis === slice.axis ? 'tab active' : 'tab'}
-              onClick={() => pickAxis(axis)}
-            >
-              {axis}
-            </button>
-          ))}
-        </div>
+        <h2>{axis} · FLAIR</h2>
       </div>
       <div className="slice-frame">
         <span className="edge edge-left">{edges.left}</span>
@@ -121,7 +105,7 @@ export function MriPanel() {
           width={CANVAS_WIDTH}
           height={canvasHeight}
           onClick={onCanvasClick}
-          aria-label={`${slice.axis} FLAIR slice ${slice.index + 1} of ${count}`}
+          aria-label={`${axis} FLAIR slice ${index + 1} of ${count}`}
         />
       </div>
       <label className="slider">
@@ -129,11 +113,11 @@ export function MriPanel() {
           type="range"
           min={0}
           max={count - 1}
-          value={slice.index}
-          onChange={(e) => s.setSlice(slice.axis, Number(e.target.value))}
+          value={index}
+          onChange={(e) => s.setSlice(axis, Number(e.target.value))}
         />
         <span className="mono">
-          {slice.index + 1} / {count} · RAS {RAS_AXIS_NAME[slice.axis]} {fmtMm(sliceRasMm(current.frame, slice.axis, slice.index))}
+          {index + 1} / {count} · RAS {RAS_AXIS_NAME[axis]} {fmtMm(sliceRasMm(current.frame, axis, index))}
         </span>
       </label>
       <ul className="legend">

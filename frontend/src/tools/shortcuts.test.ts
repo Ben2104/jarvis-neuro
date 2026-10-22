@@ -35,7 +35,8 @@ describe('shortcutToCall', () => {
     expect(call('ArrowUp')).toEqual({ name: 'inspect_mri_slice', args: { axis: 'axial', index: 26 } })
     expect(call('ArrowDown')).toEqual({ name: 'inspect_mri_slice', args: { axis: 'axial', index: 24 } })
     await press('ArrowUp')
-    expect(store.getState().slice).toEqual({ axis: 'axial', index: 26 })
+    expect(store.getState().slices.axial).toBe(26)
+    expect(store.getState().activeAxis).toBe('axial')
   })
 
   it('steps brain opacity by 0.1', () => {
