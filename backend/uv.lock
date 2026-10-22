@@ -667,10 +667,12 @@ source = { editable = "." }
 dependencies = [
     { name = "fast-simplification" },
     { name = "fastapi" },
+    { name = "httpx" },
     { name = "nibabel" },
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "numpy", version = "2.5.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "pydantic" },
+    { name = "python-multipart" },
     { name = "scikit-image" },
     { name = "scipy", version = "1.17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "scipy", version = "1.18.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
@@ -687,7 +689,6 @@ monai = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "httpx" },
     { name = "pytest" },
 ]
 
@@ -695,10 +696,12 @@ dev = [
 requires-dist = [
     { name = "fast-simplification", specifier = ">=0.1.7" },
     { name = "fastapi", specifier = ">=0.143" },
+    { name = "httpx", specifier = ">=0.28.1" },
     { name = "monai", marker = "extra == 'monai'", specifier = ">=1.4" },
     { name = "nibabel", specifier = ">=5.2" },
     { name = "numpy", specifier = ">=2.0" },
     { name = "pydantic", specifier = ">=2.7" },
+    { name = "python-multipart", specifier = ">=0.0.32" },
     { name = "scikit-image", specifier = ">=0.24" },
     { name = "scipy", specifier = ">=1.13" },
     { name = "strands-agents", extras = ["anthropic", "gemini"], specifier = ">=1.61" },
@@ -709,10 +712,7 @@ requires-dist = [
 provides-extras = ["monai"]
 
 [package.metadata.requires-dev]
-dev = [
-    { name = "httpx", specifier = ">=0.28" },
-    { name = "pytest", specifier = ">=8" },
-]
+dev = [{ name = "pytest", specifier = ">=8" }]
 
 [[package]]
 name = "jinja2"

@@ -13,6 +13,8 @@ dependencies = [
   "fastapi>=0.143",
   "uvicorn[standard]>=0.54",
   "strands-agents[anthropic,gemini]>=1.61",
+  "httpx>=0.28.1",
+  "python-multipart>=0.0.32",
 ]
 
 [project.optional-dependencies]
@@ -20,7 +22,6 @@ monai = ["monai>=1.4", "torch>=2.4"]
 
 [dependency-groups]
 dev = [
-    "httpx>=0.28",
     "pytest>=8",
 ]
 

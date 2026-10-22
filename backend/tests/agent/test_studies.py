@@ -75,3 +75,99 @@ def test_to_case_matches_the_msd_loader(tmp_path):
     assert case.modalities == {"flair": 0, "t1w": 1, "t1gd": 2, "t2w": 3}
     np.testing.assert_array_equal(case.image, ref.image)
     np.testing.assert_allclose(case.vox2ras, ref.vox2ras)
+
+
+import httpx
+from study_fakes import brats_segmenter
+
+from jarvis_neuro.agent.studies import SegResNetClient, Study, StudyRunner
+from jarvis_neuro.manifest import CaseIndex, Manifest
+
+
+def _runner(tmp_path, segment):
+    return StudyRunner(segment, cases_root=lambda: tmp_path / "cases", work_root=tmp_path / "work")
+
+
+def test_run_bakes_a_viewer_case(tmp_path):
+    files, labels = synthetic_upload(tmp_path / "in")
+    calls = []
+    runner = _runner(tmp_path, brats_segmenter(labels, calls))
+    study = Study("abcdef012345", tmp_path / "work" / "abcdef012345", files)
+    study.workdir.mkdir(parents=True)
+    runner.run(study)
+    view = study.view()
+    assert view["status"] == "done", view
+    assert view["case_id"] == "study_abcdef012345"
+    assert [view["steps"][s]["state"] for s in ("read", "volume", "segment", "measure")] == ["done"] * 4
+    assert view["steps"]["volume"]["dims"] == [56, 64, 48]
+    assert view["steps"]["volume"]["spacing_mm"] == [3.0, 3.0, 3.0]
+    assert calls == [files]
+    out = tmp_path / "cases" / "study_abcdef012345" / "monai-segresnet"
+    m = Manifest.model_validate_json((out / "manifest.json").read_text())
+    assert m.provenance == "monai-segresnet"
+    mask = np.fromfile(out / "mask_u8.bin", np.uint8)
+    assert set(np.unique(mask).tolist()) <= {0, 1, 2, 3}
+    ref = load_msd_case(tmp_path / "in" / "msd", SYNTH_NAME).labels
+    assert np.bincount(mask, minlength=4).tolist() == np.bincount(ref.ravel(), minlength=4).tolist()
+    idx = CaseIndex.model_validate_json((tmp_path / "cases" / "index.json").read_text())
+    assert [(e.case_id, e.path) for e in idx.cases] == [
+        ("study_abcdef012345", "study_abcdef012345/monai-segresnet/manifest.json")
+    ]
+
+
+def test_run_fails_at_segment_with_one_line(tmp_path):
+    files, _ = synthetic_upload(tmp_path / "in")
+
+    def broken(files, dest):
+        raise RuntimeError("segmentation service unreachable at http://x:1\ntraceback noise")
+
+    study = Study("abcdef012345", tmp_path / "work" / "abcdef012345", files)
+    _runner(tmp_path, broken).run(study)
+    view = study.view()
+    assert view["status"] == "failed"
+    assert view["step"] == "segment"
+    assert view["steps"]["segment"]["state"] == "failed"
+    assert view["steps"]["measure"]["state"] == "pending"
+    assert view["error"] == "segmentation service unreachable at http://x:1"
+
+
+def _segresnet(tmp_path, statuses, seg_bytes=b"SEG"):
+    seen = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append((request.method, request.url.path))
+        if request.method == "POST":
+            return httpx.Response(202, json={"job_id": "j1"})
+        if request.url.path == "/jobs/j1":
+            return httpx.Response(200, json=statuses.pop(0))
+        return httpx.Response(200, content=seg_bytes)
+
+    return httpx.Client(transport=httpx.MockTransport(handler), base_url="http://seg"), seen
+
+
+def test_client_posts_polls_and_downloads(tmp_path):
+    files, _ = synthetic_upload(tmp_path / "in")
+    http, seen = _segresnet(tmp_path, [{"status": "running"}, {"status": "done"}])
+    sleeps = []
+    SegResNetClient("http://seg", http=http, sleep=sleeps.append)(files, tmp_path / "seg.nii.gz")
+    assert (tmp_path / "seg.nii.gz").read_bytes() == b"SEG"
+    assert seen == [("POST", "/jobs"), ("GET", "/jobs/j1"), ("GET", "/jobs/j1"), ("GET", "/jobs/j1/seg.nii.gz")]
+    assert sleeps == [2.0]
+
+
+def test_client_reports_a_failed_job(tmp_path):
+    files, _ = synthetic_upload(tmp_path / "in")
+    http, _ = _segresnet(tmp_path, [{"status": "failed", "error": "CUDA out of memory"}])
+    with pytest.raises(RuntimeError, match="^CUDA out of memory$"):
+        SegResNetClient("http://seg", http=http, sleep=lambda s: None)(files, tmp_path / "seg.nii.gz")
+
+
+def test_client_reports_an_unreachable_service(tmp_path):
+    files, _ = synthetic_upload(tmp_path / "in")
+
+    def refuse(request):
+        raise httpx.ConnectError("refused")
+
+    http = httpx.Client(transport=httpx.MockTransport(refuse))
+    with pytest.raises(RuntimeError, match="^segmentation service unreachable at http://seg$"):
+        SegResNetClient("http://seg/", http=http)(files, tmp_path / "seg.nii.gz")
